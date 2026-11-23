@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de Privacidade — Mr. B Reader</title>
+<link rel="icon" href="icone.png">
+<style>
+  :root { --fundo: #f6f4ef; --cartao: #fff; --texto: #23262b; --suave: #5f646c; --linha: #e2ded5; --acento: #c8102e; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --fundo: #17181b; --cartao: #212327; --texto: #e8e8e5; --suave: #a3a7ae; --linha: #34373d; --acento: #ff5a6a; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto); font: 16.5px/1.65 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 40px; }
+  .topo { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  .topo img { width: 48px; height: 48px; }
+  h1 { font: 700 32px/1.15 Georgia, "Times New Roman", serif; margin: 0; }
+  .data { color: var(--suave); margin: 4px 0 28px; }
+  h2 { font: 700 20px/1.3 Georgia, serif; margin: 30px 0 8px; }
+  ul { padding-left: 22px; } li { margin: 5px 0; }
+  code { font-size: 14px; background: var(--cartao); border: 1px solid var(--linha); border-radius: 4px; padding: 1px 5px; }
+  .cartao { background: var(--cartao); border: 1px solid var(--linha); border-left: 4px solid var(--acento); border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
+  a { color: var(--acento); }
+  footer { margin-top: 44px; padding-top: 14px; border-top: 1px solid var(--linha); color: var(--suave); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="topo"><img src="icone.png" alt="" width="48" height="48"><h1>Política de Privacidade</h1></div>
+  <p class="data">Mr. B Reader · última atualização: 23 de novembro de 2026</p>
+
+  <p>Esta política explica quais dados o Mr. B Reader usa e como. Em resumo: o programa funciona no seu computador, não tem servidor próprio e só acessa o seu Google Drive se você pedir. Mesmo nesse caso, acessa apenas os arquivos que ele mesmo criou.</p>
+
+  <h2>1. Quem é o responsável</h2>
+  <p>O Mr. B Reader é um projeto pessoal de Prof. Brayhan Muller. Contato: <a href="mailto:brayhanemelton99@gmail.com">brayhanemelton99@gmail.com</a>.</p>
+
+  <h2>2. Dados guardados no seu computador</h2>
+  <p>Para lembrar onde você parou, o programa guarda no próprio computador, na pasta <code>%APPDATA%\Leitor</code>:</p>
+  <ul>
+    <li>a lista dos livros abertos e onde eles estão no disco;</li>
+    <li>a posição de leitura, os destaques, as notas e as pastas que você criou;</li>
+    <li>as capas dos livros, a imagem de fundo escolhida e as preferências de aparência.</li>
+  </ul>
+  <p>Esses dados não são enviados ao desenvolvedor nem a terceiros.</p>
+
+  <h2>3. Google Drive (opcional)</h2>
+  <p>Se você clicar em "Entrar com o Google", o programa pede as permissões abaixo. Elas são as mínimas necessárias:</p>
+  <ul>
+    <li><strong>drive.file</strong>: criar e usar <strong>somente os arquivos que o próprio Mr. B Reader criou</strong> no seu Drive. São as cópias dos seus livros, na pasta "Mr. B Reader" e nas subpastas que você criar. O programa não consegue ver nem alterar nenhum outro arquivo do seu Drive.</li>
+    <li><strong>drive.appdata</strong>: usar a área oculta do Drive reservada ao app. Nela ficam o índice da biblioteca (marcações, notas, posições de leitura, pastas) e as capas.</li>
+    <li><strong>openid e e-mail</strong>: mostrar no programa qual conta do Google está conectada.</li>
+  </ul>
+  <p>Esses dados vão direto do seu computador para o <strong>seu</strong> Google Drive. Eles não passam por nenhum servidor do Mr. B Reader, porque ele não tem servidor. A autorização dada pelo Google fica guardada no seu computador, criptografada pelo Windows. O programa nunca vê a sua senha: o login é feito no site do Google.</p>
+
+  <div class="cartao">
+    <p>O uso e a transferência, para qualquer outro aplicativo, de informações recebidas das APIs do Google pelo Mr. B Reader seguem a <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do Usuário dos Serviços de API do Google</a>, incluindo os requisitos de Uso Limitado.</p>
+    <p lang="en"><em>Mr. B Reader's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</em></p>
+  </div>
+
+  <h2>4. O que nunca fazemos</h2>
+  <ul>
+    <li>Vender, alugar ou compartilhar seus dados.</li>
+    <li>Usar seus dados para publicidade.</li>
+    <li>Usar seus dados para treinar modelos de inteligência artificial.</li>
+    <li>Ler arquivos do seu Drive que não foram criados pelo Mr. B Reader.</li>
+  </ul>
+
+  <h2>5. Como desconectar e apagar seus dados</h2>
+  <ul>
+    <li><strong>Desconectar:</strong> no programa, use o botão da nuvem → "Sair da conta". Também é possível remover o acesso em <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+    <li><strong>Apagar do Drive:</strong> apague a pasta "Mr. B Reader" do seu Drive. Para apagar a área oculta do app, abra o Google Drive no navegador → Configurações → Gerenciar apps → Mr. B Reader → Opções → "Excluir dados de app ocultos".</li>
+    <li><strong>Apagar do computador:</strong> desinstale o programa e marque a opção de apagar marcações, notas e configurações. Outra forma é apagar a pasta <code>%APPDATA%\Leitor</code>.</li>
+  </ul>
+
+  <h2>6. Mudanças nesta política</h2>
+  <p>Se esta política mudar, a data no topo da página será atualizada.</p>
+
+  <footer><a href="index.html">← Página inicial do Mr. B Reader</a></footer>
+</main>
+</body>
+</html>
