@@ -70,6 +70,33 @@ function gravar(imediato) {
   if (imediato) return f();
   tGravar = setTimeout(f, 600);
 }
+/* ---------- toque: a página do leitor é rígida ----------
+   O navegador não arrasta nem amplia a tela de leitura (era isso que fazia a página "sambar" no celular).
+   Quem vira a página é o leitor (deslizar ou tocar nas laterais); a pinça muda o tamanho da letra ou o zoom do PDF.
+   Selecionar texto com toque longo continua funcionando. */
+function travarToque(doc, win) {
+  doc.addEventListener('touchmove', e => {
+    const sel = win.getSelection && win.getSelection();
+    if (e.touches.length === 1 && sel && !sel.isCollapsed) return;   // ajustando a seleção de um trecho
+    if (e.cancelable) e.preventDefault();
+  }, { passive: false });
+  for (const g of ['gesturestart', 'gesturechange']) doc.addEventListener(g, e => e.preventDefault(), { passive: false });   // pinça do Safari
+}
+const pinca = {
+  ativa: false, d0: 0, d: 0,
+  dist(ts) { return Math.hypot(ts[0].screenX - ts[1].screenX, ts[0].screenY - ts[1].screenY); },
+  inicio(ts) { this.ativa = true; this.d0 = this.d = this.dist(ts); },
+  mover(ts) { if (this.ativa) this.d = this.dist(ts); },
+  fim() {
+    if (!this.ativa) return;
+    this.ativa = false;
+    const r = this.d / (this.d0 || 1);
+    // proporcional ao gesto: cada 20% de abertura/fechamento dos dedos = um passo (no máximo 4)
+    const n = Math.max(-4, Math.min(4, Math.round(Math.log(r) / Math.log(1.2))));
+    if (!n) return;
+    if (pdf) zoomPDF(n); else if (epub) fonteEPUB(n);   // todos os passos de uma vez (o PDF é redesenhado uma vez só)
+  }
+};
 const mqMovel = matchMedia('(max-width: 700px)');
 function ehMovel() { return mqMovel.matches; }
 let ultimoPonteiro = 'mouse';
@@ -795,7 +822,7 @@ function zoomPDF(dir) {
   const atualP = paginaAtualPDF();
   let i = ZOOMS.findIndex(z => z >= pdf.escala - 0.001);
   if (i < 0) i = ZOOMS.length - 1;
-  if (dir > 0) i = ZOOMS[i] > pdf.escala + 0.001 ? i : i + 1; else i = i - 1;
+  if (dir > 0) i = (ZOOMS[i] > pdf.escala + 0.001 ? i : i + 1) + (dir - 1); else i = i + dir;   // dir = quantos passos (pinça dá vários de uma vez)
   i = Math.max(0, Math.min(ZOOMS.length - 1, i));
   if (ZOOMS[i] === pdf.escala) return;
   pdf.escala = ZOOMS[i]; reg.pos.zoom = pdf.escala; reg.ultima = Date.now(); sujo(); gravar();
@@ -887,7 +914,8 @@ async function abrirEPUB(buffer, minha) {
   rend.hooks.content.register(contents => {
     fonteNoDoc(contents.document); temaNoDoc(contents.document);
     // deslizar para o lado é do leitor (virar a página), não do navegador ("voltar" do Chrome no celular)
-    for (const el of [contents.document.documentElement, contents.document.body]) if (el) { el.style.touchAction = 'pan-y pinch-zoom'; el.style.overscrollBehavior = 'none'; }
+    for (const el of [contents.document.documentElement, contents.document.body]) if (el) { el.style.touchAction = 'none'; el.style.overscrollBehavior = 'none'; }
+    travarToque(contents.document, contents.window);
   });
   rend.themes.fontSize((reg.pos.fonte || 100) + '%'); tamanhoTxt(reg.pos.fonte || 100);
   $('#sel-fonte').value = dados.prefs.fonte;
@@ -908,10 +936,13 @@ async function abrirEPUB(buffer, minha) {
   let toque = null;
   rend.on('touchstart', e => {
     ultimoPonteiro = 'touch';
+    if (e.touches.length === 2) { toque = null; pinca.inicio(e.touches); return; }
     const t = e.changedTouches && e.changedTouches[0];
-    toque = t && e.touches.length === 1 ? { x: t.screenX, y: t.screenY, quando: Date.now() } : null;
+    toque = t && e.touches.length === 1 && !pinca.ativa ? { x: t.screenX, y: t.screenY, quando: Date.now() } : null;
   });
+  rend.on('touchmove', e => { if (e.touches.length === 2) pinca.mover(e.touches); });
   rend.on('touchend', e => {
+    if (pinca.ativa) { if (e.touches.length < 2) pinca.fim(); toque = null; return; }
     const t = e.changedTouches && e.changedTouches[0], ini = toque; toque = null;
     if (!t || !ini || !epub || epub.rend !== rend) return;
     const sel = e.view && e.view.getSelection && e.view.getSelection();
@@ -1467,6 +1498,14 @@ function painel(abrir) {
   if (!ehMovel()) { dados.prefs.painel = abrir; gravar(); }
 }
 $('#bt-painel').onclick = () => painel();
+travarToque({ addEventListener: (t, f, o) => $('#epub-area').addEventListener(t, f, o) }, window);
+document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
+for (const area of ['#epub-area', '#pdf-scroll']) {
+  const el = $(area);
+  el.addEventListener('touchstart', e => { if (e.touches.length === 2) pinca.inicio(e.touches); }, { passive: true });
+  el.addEventListener('touchmove', e => { if (e.touches.length === 2) { pinca.mover(e.touches); if (e.cancelable) e.preventDefault(); } }, { passive: false });
+  el.addEventListener('touchend', e => { if (e.touches.length < 2) pinca.fim(); }, { passive: true });
+}
 /* PDF no toque: um toque na página mostra/esconde a barra de cima */
 $('#pdf-scroll').addEventListener('click', e => {
   if (!pdf || ultimoPonteiro !== 'touch' || e.target.closest('.hl,.marca-nota,a')) return;

@@ -22,6 +22,7 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; overscroll-behavior: none; }
+html { touch-action: pan-x pan-y; }   /* sem ampliar a tela inteira com a pinça */
 body { background: var(--fundo); color: var(--texto); font: 14px/1.45 var(--f-ui); display: flex; flex-direction: column; overflow: hidden; }
 [hidden] { display: none !important; }
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -125,7 +126,7 @@ h1 { font: 600 30px var(--f-tit); margin: 0 0 4px; }
 .textLayer { opacity: 1; }
 .textLayer ::selection { background: rgba(44, 90, 140, .30); }
 
-.epub-area { flex: 1; min-height: 0; position: relative; display: flex; align-items: stretch; background: var(--leit); touch-action: pan-y pinch-zoom; }
+.epub-area { flex: 1; min-height: 0; position: relative; display: flex; align-items: stretch; background: var(--leit); touch-action: none; }
 #epub-view { flex: 1; min-width: 0; min-height: 0; overflow: hidden; margin: 18px 0 34px; }
 .epub-nav { width: 56px; flex: none; border: 0; background: transparent; color: #8a8f97; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .epub-nav:hover { color: var(--acento); background: color-mix(in srgb, var(--acento) 12%, transparent); }

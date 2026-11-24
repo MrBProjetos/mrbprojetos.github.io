@@ -2,7 +2,7 @@
 /* Mr. B Reader — funciona sem internet depois da primeira visita.
    Com internet, o app busca sempre a versão mais nova (e guarda uma cópia); sem internet, usa a cópia.
    Nada do Google nem de outros sites passa por aqui. */
-const VERSAO = "2.2.1-80b6888b23";
+const VERSAO = "2.2.2-65451b5224";
 const CACHE = 'mrb-' + VERSAO;
 const ESSENCIAIS = ["./","app.js","config.js","img/apple-touch-icon.png","img/favicon-32.png","img/icone-192.png","img/icone-256.png","img/icone-64.png","img/logo-256.png","index.html","lib/epub.min.js","lib/jszip.min.js","lib/pdf.min.js","lib/pdf.worker.min.js","manifest.webmanifest","ponte.js","sincronia.js","style.css","textlayer.css"];          // baixados na instalação, para abrir sem internet
 const ESTAVEIS = /\/(fontes|lib|img)\//;    // fontes, bibliotecas e imagens: quase nunca mudam, vêm da cópia
