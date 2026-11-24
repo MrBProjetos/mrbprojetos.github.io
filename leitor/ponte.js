@@ -16,11 +16,11 @@
   const ESCOPOS = 'openid email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata';
   const MB = 1024 * 1024;
   const MAX_LIVRO = 800 * MB, MAX_IMAGEM = 80 * MB, MAX_CAPA = 3 * MB, MAX_FUNDO = 25 * MB, MAX_DADOS = 32 * MB, MAX_LOCAIS = 16 * MB, MAX_INDICE = 32 * MB;
-  const EXT_LIVRO = /\.(pdf|epub|docx|doc)$/i;
+  const EXT_LIVRO = /\.(pdf|epub|docx|doc|txt|md|markdown|html|htm)$/i;
   const RE_ID = /^[a-f0-9]{64}$/;
   const RE_ID_DRIVE = /^[A-Za-z0-9_-]{10,200}$/;
-  const MIMES = { pdf: 'application/pdf', epub: 'application/epub+zip', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword' };
-  const ACEITA_LIVROS = '.pdf,.epub,.docx,.doc,' + Object.values(MIMES).join(',');
+  const MIMES = { pdf: 'application/pdf', epub: 'application/epub+zip', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword', txt: 'text/plain', md: 'text/markdown', html: 'text/html' };
+  const ACEITA_LIVROS = '.pdf,.epub,.docx,.doc,.txt,.md,.markdown,.html,.htm,' + Object.values(MIMES).join(',');
   const PASTA_RAIZ = 'Mr. B Reader', NOME_INDICE = 'mrb-biblioteca.json', PASTA_MIME = 'application/vnd.google-apps.folder';
   const PEDACO = 4 * MB;   // envio retomável em pedaços de 4 MB (múltiplo de 256 KB)
 
@@ -65,7 +65,7 @@
   const sha256 = async dados => hex(await crypto.subtle.digest('SHA-256', dados));
   const aleatorio = (n = 24) => { const b = crypto.getRandomValues(new Uint8Array(n)); return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
   const espera = ms => new Promise(r => setTimeout(r, ms));
-  const tipoDe = nome => { const m = EXT_LIVRO.exec(nome || ''); return m ? m[1].toLowerCase() : null; };
+  const tipoDe = nome => { const m = EXT_LIVRO.exec(nome || ''); if (!m) return null; const t = m[1].toLowerCase(); return { markdown: 'md', htm: 'html' }[t] || t; };
   function ehImagem(b) {
     if (!(b instanceof Uint8Array) || b.byteLength < 12) return false;
     const jpg = b[0] === 0xff && b[1] === 0xd8;
@@ -96,7 +96,7 @@
     return { path: 'idb:' + hash, name: r.nome, size: r.tamanho, mtime: r.mtime, hash, data: dados };
   }
   async function guardarArquivo(file) {
-    if (!file || !tipoDe(file.name)) return { erro: 'Só consigo abrir arquivos .pdf, .epub, .docx e .doc.' };
+    if (!file || !tipoDe(file.name)) return { erro: 'Só consigo abrir arquivos .pdf, .epub, .docx, .doc, .txt, .md e .html.' };
     if (file.size > MAX_LIVRO) return { erro: 'Arquivo grande demais (máximo 800 MB).' };
     const buf = await file.arrayBuffer();
     const hash = await sha256(buf);
@@ -456,16 +456,23 @@
       return true;
     },
     async salvar(nome, bytes, tipo) {
-      if (!['pdf', 'txt'].includes(tipo) || !(bytes instanceof Uint8Array)) throw new Error('Pedido inválido');
+      const TIPOS_SALVAR = { pdf: 'application/pdf', txt: 'text/plain;charset=utf-8', md: 'text/markdown;charset=utf-8', bib: 'application/x-bibtex;charset=utf-8', json: 'application/json' };
+      if (!TIPOS_SALVAR[tipo] || !(bytes instanceof Uint8Array)) throw new Error('Pedido inválido');
       let n = String(nome || 'arquivo').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 180);
       if (!n.toLowerCase().endsWith('.' + tipo)) n += '.' + tipo;
-      const url = URL.createObjectURL(new Blob([bytes], { type: tipo === 'pdf' ? 'application/pdf' : 'text/plain;charset=utf-8' }));
+      const url = URL.createObjectURL(new Blob([bytes], { type: TIPOS_SALVAR[tipo] }));
       const a = document.createElement('a'); a.href = url; a.download = n; a.rel = 'noopener';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 120000);
       return n;
     },
     async mostrarNaPasta() { return false; },
+    async abrirBackup() {
+      const f = await escolherArquivo('.json,application/json');
+      if (!f) return null;
+      if (f.size > 64 * 1024 * 1024) return { erro: 'Arquivo grande demais para ser um backup.' };
+      return { texto: await f.text() };
+    },
     async capas(lista) {
       if (!Array.isArray(lista)) return {};
       const tem = new Set(await chaves('capas').catch(() => []));

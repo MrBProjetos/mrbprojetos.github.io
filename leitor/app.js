@@ -17,7 +17,9 @@ const CORES = {
 };
 const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
 const TAMANHOS = [70, 80, 90, 100, 110, 120, 135, 150, 170, 190, 220];
-const RE_EXT = /\.(pdf|epub|docx|doc)$/i;
+const RE_EXT = /\.(pdf|epub|docx|doc|txt|md|markdown|html|htm)$/i;
+const TIPO_ALIAS = { markdown: 'md', htm: 'html' };
+const CONVERTIDOS = new Set(['docx', 'doc', 'txt', 'md', 'html']);   // viram EPUB na memória para usar o mesmo leitor
 
 /* fontes de leitura (EPUB e Word). "fam" vazio = fonte original do livro */
 const FONTES = [
@@ -76,6 +78,7 @@ function gravar(imediato) {
    Selecionar texto com toque longo continua funcionando. */
 function travarToque(doc, win) {
   doc.addEventListener('touchmove', e => {
+    if (epub && epub.rolagem && e.touches.length === 1) return;   // rolagem contínua: o dedo rola o texto
     const sel = win.getSelection && win.getSelection();
     if (e.touches.length === 1 && sel && !sel.isCollapsed) return;   // ajustando a seleção de um trecho
     if (e.cancelable) e.preventDefault();
@@ -113,7 +116,7 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 function dataBR(ms) { const d = new Date(ms); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function tamanhoTxt(v) { $('#tamanho').textContent = Math.round(v) + '%'; }
-function tipoDe(nome) { const m = RE_EXT.exec(nome || ''); return m ? m[1].toLowerCase() : null; }
+function tipoDe(nome) { const m = RE_EXT.exec(nome || ''); if (!m) return null; const t = m[1].toLowerCase(); return TIPO_ALIAS[t] || t; }
 function semExt(n) { return String(n).replace(RE_EXT, ''); }
 function hashTxt(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function ocioso(t = 600) { return new Promise(ok => (window.requestIdleCallback ? requestIdleCallback(() => ok(), { timeout: t }) : setTimeout(ok, 30))); }
@@ -240,7 +243,7 @@ function pastasOrdenadas() { return Object.values(dados.pastas).filter(p => !p.a
 function pastaAtual() { const f = dados.prefs.pasta; return f && dados.pastas[f] && !dados.pastas[f].apagada ? f : 'todos'; }
 function livrosVisiveis() {
   const f = pastaAtual();
-  return Object.values(dados.livros).filter(r => !r.apagado && (f === 'todos' || r.pasta === f)).sort((a, b) => (b.ultima || 0) - (a.ultima || 0));
+  return filtrarLivros(Object.values(dados.livros).filter(r => !r.apagado && (f === 'todos' || r.pasta === f)));
 }
 async function mostrarBiblioteca() {
   fecharLeitura();
@@ -277,7 +280,9 @@ async function desenharLivros() {
   const recs = livrosVisiveis();
   const vazio = $('#vazio');
   vazio.hidden = recs.length > 0;
-  if (pastaAtual() === 'todos') vazio.innerHTML = VAZIO_TXT;
+  atualizarFiltros();
+  if (filtrosAtivos()) vazio.textContent = 'Nenhum livro com esses filtros. Mude a busca ou os filtros acima.';
+  else if (pastaAtual() === 'todos') vazio.innerHTML = VAZIO_TXT;
   else vazio.textContent = 'Esta pasta está vazia. Abra um arquivo com ela selecionada, ou use o botão ⋯ de um livro para trazê-lo para cá.';
   const faltam = recs.map(r => r.id).filter(id => !capasURL[id]);
   if (faltam.length) { try { Object.assign(capasURL, await API.capas(faltam)); } catch (e) {} }
@@ -309,9 +314,16 @@ function cartao(r) {
       ${soNuvem ? `<span class="selo-nuvem" title="Está no Google Drive">${ICO_NUVEM}</span>` : ''}
       ${r.lido ? `<span class="selo-lido" title="Marcado como lido em ${esc(dataBR(r.lido))}">${ICO_LIDO}Lido</span>` : ''}
       <div class="prog-transf" hidden><i></i></div></div>
-    <div class="info"><div class="nome"></div><div class="barra-prog"><i style="width:${pct}%"></i></div>
+    <div class="info"><div class="nome"></div><div class="autor" hidden></div><div class="etiquetas" hidden></div><div class="barra-prog"><i style="width:${pct}%"></i></div>
       <div class="meta"><span>${r.lido ? 'Lido em ' + esc(dataBR(r.lido).split(' ')[0]) : pct + '% lido' + (r.tipo === 'pdf' && r.pos && r.pos.pagina ? ' · pág. ' + r.pos.pagina : '')}</span><span>${n ? n + (n > 1 ? ' marcas' : ' marca') : ''}</span></div></div>`;
-  el.querySelector('.nome').textContent = semExt(r.nome);
+  el.querySelector('.nome').textContent = (r.ficha && r.ficha.titulo && r.ficha.origem === 'manual') ? r.ficha.titulo : semExt(r.nome);
+  const autor = autorCurto(r);
+  if (autor) { const a = el.querySelector('.autor'); a.textContent = autor; a.hidden = false; }
+  if (r.etiquetas && r.etiquetas.length) {
+    const box = el.querySelector('.etiquetas'); box.hidden = false;
+    for (const t of r.etiquetas.slice(0, 3)) { const s = document.createElement('span'); s.textContent = t; box.appendChild(s); }
+    if (r.etiquetas.length > 3) { const s = document.createElement('span'); s.textContent = '+' + (r.etiquetas.length - 3); box.appendChild(s); }
+  }
   const img = el.querySelector('img');
   if (img) img.onerror = () => { delete capasURL[id]; el.querySelector('.capa').insertAdjacentHTML('afterbegin', capaGerada(r)); img.nextElementSibling && img.nextElementSibling.remove(); img.remove(); };
   el.addEventListener('click', e => {
@@ -336,6 +348,8 @@ function menuLivro(r, ancora) {
   const itens = [{ rotulo: 'Abrir', acao: () => abrirLivro(r.id) }, { rotulo: r.lido ? 'Marcar como não lido' : 'Marcar como lido', acao: () => alternarLido(r) }];
   if (local && !API.web) itens.push({ rotulo: 'Mostrar na pasta do Windows', acao: async () => { if (!(await API.mostrarNaPasta(local))) aviso('O arquivo não está mais nesse lugar.'); } });
   else if (r.nuvem && r.nuvem.arquivo) itens.push({ rotulo: 'Baixar do Google Drive', acao: () => baixarLivro(r.id, false) });
+  itens.push({ rotulo: 'Etiquetas…', acao: () => editarEtiquetas(r) }, { rotulo: 'Ficha (autor, ano, DOI)…', acao: () => editarFicha(r) });
+  if ((r.marcas || []).length) itens.push({ rotulo: 'Ver as marcações', acao: () => telaTodasNotas(r.id) });
   itens.push('-', { secao: 'Pasta' });
   itens.push({ rotulo: 'Sem pasta', ativo: !r.pasta, acao: () => moverLivro(r, null) });
   for (const p of pastasOrdenadas()) itens.push({ rotulo: p.nome, ativo: r.pasta === p.id, acao: () => moverLivro(r, p.id) });
@@ -403,7 +417,7 @@ function menuPasta(p, ancora) {
 
 /* ---------------- caixa de diálogo (texto, confirmação, formulários) ---------------- */
 let dialogoAberto = null;
-function dialogo({ titulo, texto, campos = [], ok = 'OK', cancelar = 'Cancelar', perigo = false, semOk = false }) {
+function dialogo({ titulo, texto, campos = [], marcar = null, ok = 'OK', cancelar = 'Cancelar', perigo = false, semOk = false, largo = false }) {
   if (dialogoAberto) dialogoAberto(null);
   fecharMenu();
   const fundo = $('#dialogo'), form = $('#dialogo-form');
@@ -414,20 +428,35 @@ function dialogo({ titulo, texto, campos = [], ok = 'OK', cancelar = 'Cancelar',
     const l = document.createElement('label'); l.className = 'dlg-campo';
     const s = document.createElement('span'); s.textContent = c.rotulo;
     const i = document.createElement('input'); i.type = c.senha ? 'password' : 'text'; i.value = c.valor || ''; i.maxLength = c.max || 300; i.placeholder = c.dica || ''; i.spellcheck = false;
+    if (c.opcional) i.dataset.opcional = '1';
+    if (c.modo) i.inputMode = c.modo;
     l.append(s, i); box.appendChild(l); return i;
   });
+  // lista de caixas de marcar (ex.: etiquetas)
+  let caixas = [];
+  if (marcar && marcar.itens.length) {
+    const g = document.createElement('div'); g.className = 'dlg-marcar';
+    if (marcar.rotulo) { const t = document.createElement('span'); t.className = 'dlg-marcar-tit'; t.textContent = marcar.rotulo; g.appendChild(t); }
+    caixas = marcar.itens.map(it => {
+      const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.checked = !!it.marcado; c.value = it.valor;
+      const sp = document.createElement('span'); sp.textContent = it.rotulo; l.append(c, sp); g.appendChild(l); return c;
+    });
+    box.prepend(g);
+  }
+  $('#dialogo-form').classList.toggle('largo', !!largo);
   $('#dlg-ok').textContent = ok; $('#dlg-ok').hidden = semOk; $('#dlg-ok').classList.toggle('perigo-cheio', perigo);
   $('#dlg-cancelar').textContent = cancelar;
   fundo.hidden = false;
-  setTimeout(() => (inputs[0] || (semOk ? $('#dlg-cancelar') : $('#dlg-ok'))).focus(), 30);
+  setTimeout(() => ((marcar ? null : inputs[0]) || (semOk ? $('#dlg-cancelar') : $('#dlg-ok'))).focus(), 30);
   return new Promise(resolve => {
     const fim = v => { fundo.hidden = true; dialogoAberto = null; form.onsubmit = null; $('#dlg-cancelar').onclick = null; fundo.onmousedown = null; form.onkeydown = null; resolve(v); };
     dialogoAberto = fim;
     form.onsubmit = e => {
       e.preventDefault();
       const vals = inputs.map(i => i.value.replace(/[\x00-\x1f]/g, '').trim());
-      const vazio = inputs.find((i, k) => !vals[k]);
+      const vazio = inputs.find((i, k) => !vals[k] && !i.dataset.opcional);
       if (vazio) { vazio.focus(); vazio.classList.add('erro'); setTimeout(() => vazio.classList.remove('erro'), 900); return; }
+      if (marcar) { fim({ campos: vals, marcados: caixas.filter(c => c.checked).map(c => c.value) }); return; }
       fim(inputs.length ? vals : true);
     };
     $('#dlg-cancelar').onclick = () => fim(null);
@@ -627,29 +656,32 @@ async function abrirArquivo(f) {
   $('#tot-paginas').textContent = ''; $('#rod-cap').textContent = ''; $('#rod-pct').textContent = '';
   $('#bt-menos').title = motor === 'pdf' ? 'Diminuir zoom (Ctrl −)' : 'Diminuir letra (Ctrl −)';
   $('#bt-mais').title = motor === 'pdf' ? 'Aumentar zoom (Ctrl +)' : 'Aumentar letra (Ctrl +)';
-  carregando(true, tipo === 'docx' || tipo === 'doc' ? 'Preparando o documento do Word…' : 'Abrindo…');
+  carregando(true, tipo === 'docx' || tipo === 'doc' ? 'Preparando o documento do Word…' : CONVERTIDOS.has(tipo) ? 'Preparando o texto…' : 'Abrindo…');
   try {
     if (motor === 'pdf') await abrirPDF(minha);
     else {
-      const buf = tipo === 'epub' ? u8ParaBuffer(atual.bytes) : await wordParaEPUB(tipo, atual.bytes, semExt(f.name));
+      const buf = tipo === 'epub' ? u8ParaBuffer(atual.bytes) : (tipo === 'docx' || tipo === 'doc') ? await wordParaEPUB(tipo, atual.bytes, semExt(f.name)) : await textoParaEPUB(tipo, atual.bytes, semExt(f.name));
       if (minha !== abertura) return;
+      atual.epubBuf = buf;
       await abrirEPUB(buf, minha);
     }
   } catch (err) {
     if (minha !== abertura) return;
     console.error(err);
-    aviso(tipo === 'doc' || tipo === 'docx' ? 'Não foi possível ler este documento do Word.' : 'Não foi possível abrir este arquivo. Ele pode estar danificado ou protegido.', 4500);
+    aviso(tipo === 'doc' || tipo === 'docx' ? 'Não foi possível ler este documento do Word.' : CONVERTIDOS.has(tipo) ? 'Não foi possível ler este arquivo de texto.' : 'Não foi possível abrir este arquivo. Ele pode estar danificado ou protegido.', 4500);
     mostrarBiblioteca();
     return;
   } finally { if (minha === abertura) carregando(false); }
   if (minha !== abertura) return;
   atualizarListaNotas();
+  aoAbrirLivro();
   garantirCapa(id, tipo, f.size);
   if (nuvem.conectado) transferir();
 }
 function fecharLeitura() {
   esconderMenus(); fecharPop();
-  if (pdf) { pdf.obs && pdf.obs.disconnect(); try { pdf.doc.destroy(); } catch (e) {} pdf = null; }
+  if (atual) aoFecharLivro();
+  if (pdf) { pdf.obs && pdf.obs.disconnect(); pdf.roAjuste && pdf.roAjuste.disconnect(); try { pdf.doc.destroy(); } catch (e) {} pdf = null; }
   if (epub) { epub.ro && epub.ro.disconnect(); try { epub.book.destroy(); } catch (e) {} epub = null; }
   $('#pdf-paginas').replaceChildren(); $('#epub-view').replaceChildren();
   $('#pdf-scroll').hidden = true; $('#epub-area').hidden = true;
@@ -662,19 +694,21 @@ async function abrirPDF(minha) {
   await usar('pdf');
   const doc = await abrirDocPDF(atual.bytes.slice());
   if (minha !== abertura) { doc.destroy(); return; }
-  pdf = { doc, tamanhos: [], paginas: [], escala: 1, renderizadas: new Set() };
+  pdf = { doc, tamanhos: [], paginas: [], escala: 1, renderizadas: new Set(), duas: !!reg.pos.duas, recorte: reg.pos.recorte || null, ajuste: reg.pos.ajuste || null };
   $('#pdf-scroll').hidden = false;
   $('#tot-paginas').textContent = '/ ' + doc.numPages;
   // mede só a 1ª página para mostrar logo; as outras são medidas em segundo plano
   const p1 = await doc.getPage(1);
   const v = p1.getViewport({ scale: 1 });
   pdf.tamanhos = Array.from({ length: doc.numPages }, () => [v.width, v.height]);
-  if (reg.pos.zoom) pdf.escala = reg.pos.zoom;
+  if (pdf.ajuste) pdf.escala = escalaAjuste(pdf.ajuste, reg.pos.pagina || 1);
+  else if (reg.pos.zoom) pdf.escala = reg.pos.zoom;
   else {
     const larg = $('#pdf-scroll').clientWidth - (ehMovel() ? 20 : 60);
     pdf.escala = Math.min(1.6, Math.max(0.5, larg / v.width));
   }
   montarPDF(reg.pos.pagina || 1);
+  observarAjustePDF();
   sumarioPDF();
   medirPaginasPDF(doc);
 }
@@ -694,8 +728,7 @@ async function medirPaginasPDF(doc) {
     if (!mudadas.length) continue;
     const sc = $('#pdf-scroll'), ref = paginaAtualPDF(), dRef = pdf.paginas[ref - 1], delta = sc.scrollTop - dRef.offsetTop;
     for (const k of mudadas) {
-      const d = pdf.paginas[k], [w, h] = pdf.tamanhos[k];
-      d.style.width = Math.floor(w * pdf.escala) + 'px'; d.style.height = Math.floor(h * pdf.escala) + 'px';
+      caixaPagina(pdf.paginas[k], k);
       if (pdf.renderizadas.has(k + 1)) { descarregar(k + 1); renderPagina(k + 1); }
     }
     sc.scrollTop = dRef.offsetTop + delta;
@@ -705,11 +738,44 @@ async function medirPaginasPDF(doc) {
 /* PDF com páginas de larguras diferentes: a coluna fica tão larga quanto a maior;
    a rolagem para os lados acompanha a página atual para ela não aparecer cortada */
 function centrarPaginaPDF(n) {
-  const sc = $('#pdf-scroll'), d = pdf && pdf.paginas[n - 1];
+  const sc = $('#pdf-scroll'); let d = pdf && pdf.paginas[n - 1];
+  if (d && pdf.duas && d.parentElement.classList.contains('linha-pdf')) d = d.parentElement;   // duas páginas: centra a dupla
   if (!d || sc.scrollWidth <= sc.clientWidth + 1) return;
   const r = d.getBoundingClientRect(), rs = sc.getBoundingClientRect();
   if (r.width > sc.clientWidth) return;   // página mais larga que a tela: o usuário rola
   sc.scrollLeft = sc.scrollLeft + (r.left + r.width / 2) - (rs.left + sc.clientWidth / 2);
+}
+/* cada página: .pagina (tamanho visível, já sem as margens recortadas) > .janela (corta) > .pc (página inteira: desenho, texto, destaques, links) */
+function cortePDF() { return (pdf && pdf.recorte) || { x0: 0, y0: 0, x1: 1, y1: 1 }; }
+function caixaPagina(d, k) {
+  const s = pdf.escala, [w, h] = pdf.tamanhos[k], c = cortePDF();
+  d.style.width = Math.floor(w * (c.x1 - c.x0) * s) + 'px'; d.style.height = Math.floor(h * (c.y1 - c.y0) * s) + 'px';
+  const pc = d.querySelector('.pc');
+  Object.assign(pc.style, { width: Math.floor(w * s) + 'px', height: Math.floor(h * s) + 'px', left: -Math.floor(w * c.x0 * s) + 'px', top: -Math.floor(h * c.y0 * s) + 'px' });
+}
+/* escala para "ajustar à largura" ou "página inteira" */
+function escalaAjuste(modo, n) {
+  const sc = $('#pdf-scroll'), c = cortePDF();
+  const [w, h] = pdf.tamanhos[Math.max(0, Math.min(pdf.tamanhos.length - 1, (n || 1) - 1))];
+  const larg = sc.clientWidth - (ehMovel() ? 20 : 48) - (pdf.duas ? 16 : 0) - 4, alt = sc.clientHeight - 30;
+  const porLarg = larg / ((pdf.duas ? 2 : 1) * w * (c.x1 - c.x0)), porAlt = alt / (h * (c.y1 - c.y0));
+  return Math.max(0.25, Math.min(4, modo === 'altura' ? Math.min(porLarg, porAlt) : porLarg));
+}
+function observarAjustePDF() {
+  if (pdf.roAjuste) pdf.roAjuste.disconnect();
+  let t = null, larg = 0, alt = 0;
+  const meu = pdf;
+  pdf.roAjuste = new ResizeObserver(() => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      if (pdf !== meu || !pdf.ajuste) return;
+      const sc = $('#pdf-scroll'); if (sc.clientWidth === larg && sc.clientHeight === alt) return;
+      larg = sc.clientWidth; alt = sc.clientHeight;
+      const n = paginaAtualPDF(), e = escalaAjuste(pdf.ajuste, n);
+      if (Math.abs(e - pdf.escala) / pdf.escala > 0.015) { pdf.escala = e; montarPDF(n); }
+    }, 180);
+  });
+  pdf.roAjuste.observe($('#pdf-scroll'));
 }
 function montarPDF(irPara) {
   const cont = $('#pdf-paginas');
@@ -723,13 +789,20 @@ function montarPDF(irPara) {
     }
   }, { root: $('#pdf-scroll'), rootMargin: '1200px 0px' });
   const frag = document.createDocumentFragment();
-  pdf.tamanhos.forEach(([w, h], k) => {
+  let linha = null;
+  pdf.tamanhos.forEach((t, k) => {
     const d = document.createElement('div');
     d.className = 'pagina'; d.dataset.p = k + 1;
-    d.style.width = Math.floor(w * s) + 'px'; d.style.height = Math.floor(h * s) + 'px';
+    d.innerHTML = '<div class="janela"><div class="pc"></div></div>';
+    caixaPagina(d, k);
     const num = document.createElement('span'); num.className = 'num'; num.textContent = k + 1; d.appendChild(num);
-    frag.appendChild(d); pdf.paginas.push(d);
+    if (pdf.duas) {
+      if (k % 2 === 0) { linha = document.createElement('div'); linha.className = 'linha-pdf'; frag.appendChild(linha); }
+      linha.appendChild(d);
+    } else frag.appendChild(d);
+    pdf.paginas.push(d);
   });
+  cont.classList.toggle('duas', pdf.duas);
   cont.replaceChildren(frag);
   pdf.paginas.forEach(d => pdf.obs.observe(d));
   tamanhoTxt(s * 100);
@@ -748,21 +821,26 @@ async function renderPagina(i) {
   const tl = document.createElement('div'); tl.className = 'textLayer';
   tl.style.setProperty('--scale-factor', escala);
   const hl = document.createElement('div'); hl.className = 'camada-hl';
-  d.querySelectorAll('canvas,.textLayer,.camada-hl').forEach(x => x.remove());
-  d.prepend(cv); d.appendChild(tl); d.appendChild(hl);
+  const bu = document.createElement('div'); bu.className = 'camada-busca';
+  const pc = d.querySelector('.pc');
+  pc.querySelectorAll('canvas,.textLayer,.camada-hl,.camada-busca,.camada-links').forEach(x => x.remove());
+  pc.prepend(cv); pc.appendChild(tl); pc.appendChild(bu); pc.appendChild(hl);
   try {
     await page.render({ canvasContext: cv.getContext('2d', { alpha: false }), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise;
     if (pdf !== meu || !pdf.renderizadas.has(i)) return;
     const tarefa = pdfjsLib.renderTextLayer({ textContentSource: page.streamTextContent(), container: tl, viewport: vp });
     await tarefa.promise;
   } catch (e) { /* página saiu da tela durante o desenho */ }
+  if (pdf !== meu || !pdf.renderizadas.has(i)) return;
   desenharMarcasPDF(i);
+  buscaNaPaginaPDF(i);
+  linksPDF(i, page, pc).catch(() => {});
 }
 function descarregar(i) {
   if (!pdf || !pdf.renderizadas.has(i)) return;
   const d = pdf.paginas[i - 1];
   const c = d.querySelector('canvas'); if (c) { c.width = 0; c.height = 0; }
-  d.querySelectorAll('canvas,.textLayer,.camada-hl').forEach(x => x.remove());
+  d.querySelectorAll('canvas,.textLayer,.camada-hl,.camada-busca,.camada-links').forEach(x => x.remove());
   pdf.renderizadas.delete(i);
 }
 function desenharMarcasPDF(i) {
@@ -793,13 +871,20 @@ function paginaAtualPDF() {
   // busca binária: rápido mesmo em PDFs com milhares de páginas
   let lo = 0, hi = pdf.paginas.length - 1, n = 0;
   while (lo <= hi) { const mid = (lo + hi) >> 1; if (pdf.paginas[mid].offsetTop <= lim) { n = mid; lo = mid + 1; } else hi = mid - 1; }
+  if (pdf.duas && n % 2 === 1) n--;   // duas lado a lado: vale a da esquerda
   return n + 1;
 }
-function irPaginaPDF(n, instantaneo) {
+/* fy: ponto da página (0 = topo, 1 = pé) que deve ficar no alto da tela (links e busca) */
+function irPaginaPDF(n, instantaneo, fy) {
   if (!pdf) return;
   n = Math.max(1, Math.min(pdf.doc.numPages, n | 0));
   const d = pdf.paginas[n - 1];
-  $('#pdf-scroll').scrollTo({ top: d.offsetTop - 12, behavior: instantaneo ? 'auto' : 'smooth' });
+  let top = d.offsetTop - 12;
+  if (typeof fy === 'number' && isFinite(fy)) {
+    const c = cortePDF(), h = pdf.tamanhos[n - 1][1] * pdf.escala;
+    top = d.offsetTop + Math.max(0, (fy - c.y0) * h) - 40;
+  }
+  $('#pdf-scroll').scrollTo({ top, behavior: instantaneo ? 'auto' : 'smooth' });
   centrarPaginaPDF(n);
   atualizarPosPDF(n);
 }
@@ -812,6 +897,7 @@ function atualizarPosPDF(n) {
   reg.pos.pagina = n; reg.progresso = prog; reg.ultima = Date.now(); sujo();
   $('#progresso-barra').style.width = (reg.progresso * 100) + '%';
   gravar();
+  aoMudarPosicao(n);
 }
 let rafScroll = 0;
 $('#pdf-scroll').addEventListener('scroll', () => {
@@ -820,6 +906,7 @@ $('#pdf-scroll').addEventListener('scroll', () => {
 }, { passive: true });
 function zoomPDF(dir) {
   const atualP = paginaAtualPDF();
+  if (pdf.ajuste) { pdf.ajuste = null; delete reg.pos.ajuste; }   // zoom manual desliga o ajuste automático
   let i = ZOOMS.findIndex(z => z >= pdf.escala - 0.001);
   if (i < 0) i = ZOOMS.length - 1;
   if (dir > 0) i = (ZOOMS[i] > pdf.escala + 0.001 ? i : i + 1) + (dir - 1); else i = i + dir;   // dir = quantos passos (pinça dá vários de uma vez)
@@ -868,7 +955,7 @@ function selecaoPDF() {
     const rg = sel.getRangeAt(0);
     const ini = rg.startContainer.nodeType === 1 ? rg.startContainer : rg.startContainer.parentElement;
     const pag = ini && ini.closest('.pagina'); if (!pag) return;
-    const pr = pag.getBoundingClientRect();
+    const pr = pag.querySelector('.pc').getBoundingClientRect();   // página inteira (mesmo com as margens recortadas)
     const vistos = new Set(); const rects = [];
     for (const r of rg.getClientRects()) {
       if (r.width < 1 || r.height < 1) continue;
@@ -902,20 +989,28 @@ async function abrirEPUB(buffer, minha) {
   await usar('epub');
   if (minha !== abertura) return;
   $('#epub-area').hidden = false;
+  const rolagem = !!dados.prefs.rolagem;
+  $('#epub-area').classList.toggle('rolagem', rolagem);
+  aplicarMargemEPUB();
   const book = ePub(buffer);
-  const rend = book.renderTo('epub-view', { width: '100%', height: '100%', flow: 'paginated', spread: 'auto', minSpreadWidth: 1100, allowScriptedContent: false });
-  epub = { book, rend, locaisProntos: false };
+  const rend = book.renderTo('epub-view', rolagem
+    ? { width: '100%', height: '100%', flow: 'scrolled', manager: 'continuous', allowScriptedContent: false }
+    : { width: '100%', height: '100%', flow: 'paginated', spread: 'auto', minSpreadWidth: 1100, allowScriptedContent: false });
+  epub = { book, rend, locaisProntos: false, rolagem };
   // reajusta as colunas quando o painel abre/fecha ou a janela muda de tamanho
   let tRes = null;
   epub.ro = new ResizeObserver(() => { clearTimeout(tRes); tRes = setTimeout(() => { if (epub && epub.rend === rend) { try { rend.resize(); } catch (e) {} redesenharMarcasLogo(); } }, 120); });
   epub.ro.observe($('#epub-view'));
   // as cores da página ficam em temaNoDoc (os temas do epub.js "vazavam" de uma cor para a outra)
-  rend.themes.default({ 'html': { 'overscroll-behavior': 'none' }, 'img, svg, image': { 'max-width': '100% !important', 'max-height': '92vh !important' }, 'p': { 'line-height': '1.6 !important' } });
+  rend.themes.default({ 'html': { 'overscroll-behavior': rolagem ? 'auto' : 'none' }, 'img, svg, image': { 'max-width': '100% !important', 'max-height': '92vh !important' } });
   rend.hooks.content.register(contents => {
-    fonteNoDoc(contents.document); temaNoDoc(contents.document);
+    fonteNoDoc(contents.document); temaNoDoc(contents.document); layoutNoDoc(contents.document);
     // deslizar para o lado é do leitor (virar a página), não do navegador ("voltar" do Chrome no celular)
-    for (const el of [contents.document.documentElement, contents.document.body]) if (el) { el.style.touchAction = 'none'; el.style.overscrollBehavior = 'none'; }
-    travarToque(contents.document, contents.window);
+    // na rolagem contínua o dedo rola o texto para cima e para baixo
+    // (na rolagem, a roda do mouse e o dedo dentro do texto precisam "passar" para a página de fora)
+    for (const el of [contents.document.documentElement, contents.document.body]) if (el) { el.style.touchAction = rolagem ? 'pan-y' : 'none'; el.style.overscrollBehavior = rolagem ? 'auto' : 'none'; }
+    if (!rolagem) travarToque(contents.document, contents.window);
+    ganchosEPUB(contents);
     const d = contents.document;
     if ((reg.pos.fonte || 100) !== 100 && d.querySelector('img, svg')) imagensProntas(d).then(() => { if (epub && epub.rend === rend) { imagensNoDoc(d, (reg && reg.pos.fonte) || 100); redesenharMarcasLogo(); } });
   });
@@ -950,7 +1045,7 @@ async function abrirEPUB(buffer, minha) {
     const sel = e.view && e.view.getSelection && e.view.getSelection();
     if (sel && !sel.isCollapsed) return;                       // está selecionando texto
     const dx = t.screenX - ini.x, dy = t.screenY - ini.y, dt = Date.now() - ini.quando;
-    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4 && dt < 900) { esconderMenus(); dx < 0 ? rend.next() : rend.prev(); return; }
+    if (!rolagem && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4 && dt < 900) { esconderMenus(); dx < 0 ? rend.next() : rend.prev(); return; }
     if (Math.abs(dx) > 12 || Math.abs(dy) > 12 || dt > 450) return;
     if (e.target && e.target.closest && e.target.closest('a[href]')) return;   // link do livro (nota de rodapé etc.)
     if (!$('#menu-sel').hidden || !$('#pop-nota').hidden) return;
@@ -960,7 +1055,7 @@ async function abrirEPUB(buffer, minha) {
     if (rel < 0.28) rend.prev(); else if (rel > 0.72) rend.next(); else alternarImersivo();
   });
 
-  if (ultimoPonteiro === 'touch' && !dados.prefs.dicaToque) { dados.prefs.dicaToque = 1; gravar(); setTimeout(() => aviso('Deslize ou toque nas laterais para virar a página.', 4000), 1200); }
+  if (ultimoPonteiro === 'touch' && !rolagem && !dados.prefs.dicaToque) { dados.prefs.dicaToque = 1; gravar(); setTimeout(() => aviso('Deslize ou toque nas laterais para virar a página.', 4000), 1200); }
   await rend.display(reg.pos.cfi || undefined);
   if (!epub || epub.book !== book) return;
   for (const m of reg.marcas) aplicarMarcaEPUB(m);
@@ -998,6 +1093,49 @@ function fonteNoDoc(d) {
   let s = d.getElementById('mrb-fonte');
   if (!s) { s = d.createElement('style'); s.id = 'mrb-fonte'; d.head.appendChild(s); }
   s.textContent = cssFonte();
+}
+/* margens, espaço entre linhas e alinhamento (EPUB, Word e textos) */
+const LAYOUT_PADRAO = { margem: 1, linha: 1.6, alinhar: 'original' };
+const MARGENS = ['0px', '3%', '7%', '12%'];
+function layoutAtual() {
+  const l = Object.assign({}, LAYOUT_PADRAO, dados.prefs.layout || {});
+  l.margem = Math.max(0, Math.min(3, l.margem | 0));
+  l.linha = Math.max(1.1, Math.min(2.4, +l.linha || 1.6));
+  if (!['original', 'justificado', 'esquerda'].includes(l.alinhar)) l.alinhar = 'original';
+  return l;
+}
+function cssLayout() {
+  const l = layoutAtual();
+  let c = `html body, html body p, html body li, html body blockquote, html body dd { line-height: ${l.linha} !important; }`;
+  if (l.alinhar === 'justificado') c += 'html body p { text-align: justify !important; -webkit-hyphens: auto !important; hyphens: auto !important; }';
+  else if (l.alinhar === 'esquerda') c += 'html body p { text-align: left !important; }';
+  return c;
+}
+function layoutNoDoc(d) {
+  if (!d || !d.head) return;
+  let s = d.getElementById('mrb-layout');
+  if (!s) { s = d.createElement('style'); s.id = 'mrb-layout'; d.head.appendChild(s); }
+  s.textContent = cssLayout();
+}
+function aplicarMargemEPUB() { $('#epub-area').style.setProperty('--mg', MARGENS[layoutAtual().margem]); }
+function aplicarLayoutEPUB() {
+  aplicarMargemEPUB();
+  if (!epub) return;
+  const cfi = reg && reg.pos.cfi;
+  epub.rend.getContents().forEach(c => layoutNoDoc(c.document));
+  try { epub.rend.resize(); } catch (e) {}
+  redesenharMarcasLogo();
+  if (cfi) setTimeout(() => { if (epub) epub.rend.display(cfi); }, 60);
+}
+/* virar páginas ↔ rolar: o epub.js precisa montar o livro de novo */
+async function recarregarEPUB() {
+  if (!epub || !atual || !atual.epubBuf) return;
+  const minha = abertura, buf = atual.epubBuf;
+  epub.ro && epub.ro.disconnect();
+  try { epub.book.destroy(); } catch (e) {}
+  epub = null; $('#epub-view').replaceChildren();
+  carregando(true);
+  try { await abrirEPUB(buf, minha); } finally { carregando(false); }
 }
 function aplicarFonteEPUB() {
   $('#sel-fonte').value = dados.prefs.fonte;
@@ -1116,6 +1254,7 @@ function posicaoEPUB(loc) {
   $('#rod-cap').textContent = capituloEPUB(loc);
   $('#progresso-barra').style.width = ((reg.progresso || 0) * 100) + '%';
   gravar();
+  aoMudarPosicao(pct !== null ? paginaEPUB(loc, pct) : null, loc);
 }
 /* imagens do livro acompanham o tamanho da letra: mede cada imagem como ela fica com a letra em 100%
    e aplica a mesma proporção da letra (os limites de largura e altura da página continuam valendo) */
@@ -1228,6 +1367,98 @@ async function wordParaEPUB(tipo, bytes, titulo) {
     html = textoParaHTML(r.corpo, (r.notas || '') + '\n' + (r.finais || ''));
   }
   return montarEPUB(titulo, html);
+}
+/* ================= texto simples, Markdown e HTML → EPUB em memória ================= */
+function decodificarTexto(bytes) {
+  let b = bytes;
+  if (b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) b = b.subarray(3);
+  if (b[0] === 0xff && b[1] === 0xfe) return new TextDecoder('utf-16le').decode(b.subarray(2));
+  if (b[0] === 0xfe && b[1] === 0xff) return new TextDecoder('utf-16be').decode(b.subarray(2));
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); }
+  catch (e) { return new TextDecoder('windows-1252').decode(b); }   // arquivos antigos do Windows
+}
+/* .txt: parágrafos separados por linha em branco; se o arquivo não usa linha em branco, cada linha é um parágrafo */
+function txtParaHTML(t) {
+  t = t.replace(/\r\n?/g, '\n');
+  const blocos = t.split(/\n[ \t]*\n+/);
+  const porLinha = blocos.length < 3 && t.split('\n').length > 6;
+  if (porLinha) return textoParaHTML(t, '');
+  const out = [];
+  for (const b of blocos) {
+    const linhas = b.split('\n').map(x => x.replace(/\t/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    if (!linhas.length) continue;
+    const j = linhas.join(' ');
+    if (linhas.length === 1 && j.length <= 90 && (RE_TITULO_DOC.test(j) || (j === j.toUpperCase() && /[A-ZÀ-Ý]/.test(j))) && !/[.;,]$/.test(j)) out.push('<h2>' + esc(j) + '</h2>');
+    else out.push('<p>' + esc(j) + '</p>');
+  }
+  return out.join('\n');
+}
+/* Markdown básico: títulos, ênfase, listas, citações, código, links, linhas e tabelas simples */
+function mdParaHTML(md) {
+  const linhas = md.replace(/\r\n?/g, '\n').split('\n');
+  const inline = t => {
+    const codigos = [];
+    t = t.replace(/`([^`]+)`/g, (_, c) => { codigos.push(c); return '\u0000' + (codigos.length - 1) + '\u0000'; });
+    t = esc(t);
+    t = t.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')                                   // imagens externas não são carregadas
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)[^)]*\)/g, '<a href="$2">$1</a>')
+      .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/(\*\*|__)(.+?)\1/g, '<strong>$2</strong>')
+      .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1<em>$2</em>')
+      .replace(/(^|[^_\w])_(?!\s)(.+?)_(?!\w)/g, '$1<em>$2</em>')
+      .replace(/~~(.+?)~~/g, '<del>$1</del>');
+    return t.replace(/\u0000(\d+)\u0000/g, (_, i) => '<code>' + esc(codigos[+i]) + '</code>');
+  };
+  const out = []; let i = 0;
+  while (i < linhas.length) {
+    const l = linhas[i];
+    if (/^\s*$/.test(l)) { i++; continue; }
+    let m;
+    if ((m = /^(`{3,}|~{3,})/.exec(l))) {                 // bloco de código
+      const fim = m[1]; const cod = []; i++;
+      while (i < linhas.length && !linhas[i].startsWith(fim)) cod.push(linhas[i++]);
+      i++; out.push('<pre><code>' + esc(cod.join('\n')) + '</code></pre>'); continue;
+    }
+    if ((m = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(l))) { const n = m[1].length; out.push(`<h${n}>${inline(m[2])}</h${n}>`); i++; continue; }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) { out.push('<hr/>'); i++; continue; }
+    if (/^\s*>/.test(l)) {
+      const q = []; while (i < linhas.length && /^\s*>/.test(linhas[i])) q.push(linhas[i++].replace(/^\s*>\s?/, ''));
+      out.push('<blockquote>' + mdParaHTML(q.join('\n')) + '</blockquote>'); continue;
+    }
+    if (/^\s*([-*+]|\d+[.)])\s+/.test(l)) {
+      const ord = /^\s*\d/.test(l); const itens = [];
+      while (i < linhas.length && /^\s*([-*+]|\d+[.)])\s+/.test(linhas[i])) {
+        let it = linhas[i++].replace(/^\s*([-*+]|\d+[.)])\s+/, '');
+        while (i < linhas.length && /^\s{2,}\S/.test(linhas[i]) && !/^\s*([-*+]|\d+[.)])\s+/.test(linhas[i])) it += ' ' + linhas[i++].trim();
+        itens.push('<li>' + inline(it.replace(/^\[( |x)\]\s*/i, (x, c) => c.trim() ? '☑ ' : '☐ ')) + '</li>');
+      }
+      out.push((ord ? '<ol>' : '<ul>') + itens.join('') + (ord ? '</ol>' : '</ul>')); continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < linhas.length && /^\s*\|?\s*:?-{2,}/.test(linhas[i + 1])) {
+      const cel = x => x.trim().replace(/^\||\|$/g, '').split('|').map(c => inline(c.trim()));
+      const cab = cel(l); i += 2; const corpo = [];
+      while (i < linhas.length && /^\s*\|.*\|\s*$/.test(linhas[i])) corpo.push(cel(linhas[i++]));
+      out.push('<table><tr>' + cab.map(c => '<th>' + c + '</th>').join('') + '</tr>' + corpo.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</table>');
+      continue;
+    }
+    const p = [];
+    while (i < linhas.length && !/^\s*$/.test(linhas[i]) && !/^(#{1,6}\s|`{3,}|~{3,}|\s*>|\s*([-*+]|\d+[.)])\s+)/.test(linhas[i])) p.push(linhas[i++]);
+    if (!p.length) { out.push('<p>' + inline(linhas[i++]) + '</p>'); continue; }
+    out.push('<p>' + p.map((x, k) => inline(x.trim()) + (/ {2,}$/.test(x) && k < p.length - 1 ? '<br/>' : '')).join(' ') + '</p>');
+  }
+  return out.join('\n');
+}
+function htmlParaCorpo(t) {
+  const d = new DOMParser().parseFromString(t, 'text/html');
+  const titulo = (d.querySelector('title') || {}).textContent || '';
+  if (d.body) limparHTML(d.body);   // tira scripts, eventos (onclick…) e links perigosos já aqui
+  return { html: d.body ? d.body.innerHTML : '', titulo: titulo.trim() };
+}
+async function textoParaEPUB(tipo, bytes, titulo) {
+  const t = decodificarTexto(bytes);
+  if (tipo === 'md') return montarEPUB(titulo, mdParaHTML(t));
+  if (tipo === 'html') { const r = htmlParaCorpo(t); return montarEPUB(titulo, r.html); }
+  return montarEPUB(titulo, txtParaHTML(t));
 }
 const RE_TITULO_DOC = /^(cap[ií]tulo|parte|livro|se[cç][aã]o|pr[oó]logo|ep[ií]logo|introdu[cç][aã]o|conclus[aã]o|pref[aá]cio|ap[eê]ndice|chapter|part|prologue|epilogue)\b/i;
 function textoParaHTML(corpo, notas) {
@@ -1503,8 +1734,16 @@ async function exportarTXT() {
 
 /* ================= controles ================= */
 function teclas(e) {
-  if (e.key === 'Escape') { esconderMenus(); fecharPop(); fecharMenu(); if (!$('#pop-capas').hidden) popCapas(false); return; }
+  if (e.key === 'Escape') {
+    if (!$('#tela').hidden) { fecharTela(); return; }
+    if (!$('#busca').hidden && $('#menu-sel').hidden && $('#pop-nota').hidden) { fecharBusca(); return; }
+    esconderMenus(); fecharPop(); fecharMenu(); esconderPrevia(); popLayout(false); if (!$('#pop-capas').hidden) popCapas(false); return;
+  }
   if (!atual) return;
+  if (e.type === 'keyup' && (e.ctrlKey || e.metaKey || e.altKey)) return;   // atalhos valem só ao apertar (no livro chegam as duas coisas)
+  if (e.altKey && e.key === 'ArrowLeft') { voltarLink(); e.preventDefault && e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) { abrirBusca(); e.preventDefault && e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) { alternarMarcador(); e.preventDefault && e.preventDefault(); return; }
   const alvo = e.target && e.target.tagName;
   if (alvo === 'INPUT' || alvo === 'TEXTAREA') return;
   // numa caixa de escolha (cor da página, fonte), as setas para o lado continuam virando a página
@@ -1513,8 +1752,8 @@ function teclas(e) {
   if (e.key === 'ArrowRight' || e.key === 'PageDown') { proxima(); e.preventDefault && e.preventDefault(); }
   if (e.key === 'ArrowLeft' || e.key === 'PageUp') { anterior(); e.preventDefault && e.preventDefault(); }
 }
-function proxima() { if (pdf) irPaginaPDF(paginaAtualPDF() + 1); else if (epub) epub.rend.next(); }
-function anterior() { if (pdf) irPaginaPDF(paginaAtualPDF() - 1); else if (epub) epub.rend.prev(); }
+function proxima() { if (pdf) irPaginaPDF(paginaAtualPDF() + (pdf.duas ? 2 : 1)); else if (epub) epub.rend.next(); }
+function anterior() { if (pdf) irPaginaPDF(paginaAtualPDF() - (pdf.duas ? 2 : 1)); else if (epub) epub.rend.prev(); }
 function mais() { if (pdf) zoomPDF(1); else if (epub) fonteEPUB(1); }
 function menos() { if (pdf) zoomPDF(-1); else if (epub) fonteEPUB(-1); }
 
@@ -1568,16 +1807,16 @@ function alternarImersivo(ligar) {
   if (ligar) { esconderMenus(); fecharMenu(); opcoesTexto(false); }
   if (ligar && !dados.prefs.dicaImersivo) { dados.prefs.dicaImersivo = 1; gravar(); aviso('Toque no meio da página para mostrar a barra de novo.', 3500); }
 }
-document.querySelectorAll('.aba').forEach(a => a.onclick = () => {
-  document.querySelectorAll('.aba').forEach(x => x.classList.toggle('ativa', x === a));
-  $('#aba-notas').hidden = a.dataset.aba !== 'notas'; $('#aba-sumario').hidden = a.dataset.aba !== 'sumario';
+document.querySelectorAll('.aba[data-aba]').forEach(a => a.onclick = () => {
+  document.querySelectorAll('.aba[data-aba]').forEach(x => x.classList.toggle('ativa', x === a));
+  for (const n of ['notas', 'marcadores', 'sumario']) $('#aba-' + n).hidden = a.dataset.aba !== n;
 });
 document.querySelectorAll('#menu-sel .cor').forEach(b => b.onclick = () => criarMarca(b.dataset.cor, false));
 $('#bt-nota').onclick = () => criarMarca('amarelo', true);
 $('#bt-copiar').onclick = () => { if (pendente) navigator.clipboard.writeText(pendente.texto).then(() => aviso('Trecho copiado'), () => {}); esconderMenus(); };
 $('#pop-salvar').onclick = salvarNota; $('#pop-cancelar').onclick = fecharPop; $('#pop-excluir').onclick = excluirMarca;
 $('#pop-texto').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) salvarNota(); if (e.key === 'Escape') fecharPop(); });
-$('#bt-exportar-pdf').onclick = exportarPDF; $('#bt-exportar-txt').onclick = exportarTXT;
+$('#bt-exportar-pdf').onclick = exportarPDF; $('#bt-exportar-txt').onclick = () => menuExportar($('#bt-exportar-txt'));
 for (const [sel, chave, ir] of [['#in-pct', 'pct', irPorcentagem], ['#in-pagina', 'pag', irPagina]]) {
   const inp = $(sel);
   inp.addEventListener('keydown', e => {
@@ -1678,6 +1917,7 @@ $('#bib-wrap').addEventListener('wheel', e => {
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); abrirDialogo(); return; }
   if (e.ctrlKey && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); mostrarBiblioteca(); return; }
+  if (e.ctrlKey && (e.key === 'f' || e.key === 'F') && !atual && !$('#bib-wrap').hidden) { e.preventDefault(); $('#bib-busca').focus(); return; }
   if (e.ctrlKey && (e.key === '=' || e.key === '+')) { e.preventDefault(); if (!$('#bib-wrap').hidden) mudarTamCapas(1); else if (atual) mais(); return; }
   if (e.ctrlKey && e.key === '-') { e.preventDefault(); if (!$('#bib-wrap').hidden) mudarTamCapas(-1); else if (atual) menos(); return; }
   teclas(e);
@@ -1687,6 +1927,8 @@ document.addEventListener('mousedown', e => {
   const t = e.target.closest ? e.target : document.body;
   if (!t.closest('#menu-sel')) esconderMenus();
   if (!t.closest('#menu-flut') && !t.closest('#bt-interface,#bt-fundo')) fecharMenu();
+  if (!t.closest('#pop-layout,#bt-layout') && !$('#pop-layout').hidden) popLayout(false);
+  if (!t.closest('#previa')) esconderPrevia();
   if (!t.closest('#pop-capas,#bt-capas') && !$('#pop-capas').hidden) popCapas(false);
   if (!t.closest('#pop-nota') && !t.closest('.hl,.marca-nota,.nota-item')) { if (!$('#pop-nota').hidden) fecharPop(); }
 });
@@ -1699,7 +1941,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 ['dragleave', 'drop'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); $('#soltar').classList.remove('sobre'); }));
 document.addEventListener('drop', e => {
   const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return;
-  if (!tipoDe(f.name)) { aviso('Só consigo abrir arquivos .pdf, .epub, .docx e .doc.'); return; }
+  if (!tipoDe(f.name)) { aviso('Só consigo abrir arquivos .pdf, .epub, .docx, .doc, .txt, .md e .html.'); return; }
   const p = API.caminhoDoArquivo(f); if (p) abrirCaminho(p);
 });
 

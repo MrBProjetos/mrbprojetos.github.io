@@ -20,6 +20,7 @@
 <script src="ponte.js" defer></script>
 <script src="sincronia.js" defer></script>
 <script src="app.js" defer></script>
+<script src="recursos.js" defer></script>
 </head>
 <body>
 <header id="barra">
@@ -47,9 +48,13 @@
       <option value="auto">Página automática</option><option value="claro">Página clara</option><option value="sepia">Página sépia</option><option value="escuro">Página escura</option>
     </select>
     <select id="sel-fonte" class="sel" title="Fonte do texto" aria-label="Fonte do texto"></select>
+    <button id="bt-layout" class="bt ic so-epub" title="Margens, espaço entre linhas, alinhamento e rolagem" aria-label="Layout do texto" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button>
     </span>
     <button id="bt-aa" class="bt ic so-movel" title="Tamanho do texto, cor da página e fonte" aria-label="Opções do texto" aria-expanded="false"><b>Aa</b></button>
-    <button id="bt-painel" class="bt" title="Anotações e sumário"><svg viewBox="0 0 24 24"><path d="M5 3h14v18l-7-4-7 4z"/></svg><span>Anotações</span></button>
+    <button id="bt-busca" class="bt ic" title="Procurar no texto (Ctrl+F)" aria-label="Procurar no texto"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg></button>
+    <button id="bt-marcador" class="bt ic" title="Marcar esta página (Ctrl+D)" aria-label="Marcar esta página" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></svg></button>
+    <button id="bt-mais-opcoes" class="bt ic" title="Mais opções: exibição, ficha, voz, exportar" aria-label="Mais opções"><svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18.5" cy="12" r="1.3" fill="currentColor"/></svg></button>
+    <button id="bt-painel" class="bt" title="Anotações, marcadores e sumário"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M14.5 4.5v15M17 8.5h.5M17 11.5h.5"/></svg><span>Anotações</span></button>
   </div>
   <div class="grupo">
     <button id="bt-nuvem" class="bt ic bt-nuvem" data-estado="desligada" title="Nuvem" aria-label="Nuvem (Google Drive)"><svg viewBox="0 0 24 24"><path class="nv-forma" d="M7 18.5h10.5a4 4 0 0 0 .4-7.98A6 6 0 0 0 6.2 9.3 4.6 4.6 0 0 0 7 18.5z"/><path class="nv-ok" d="M9.3 13.8l1.9 1.9 3.6-3.8"/><path class="nv-sync" d="M9.2 14a3 3 0 0 1 5.2-1.9M14.8 14a3 3 0 0 1-5.2 1.9"/><path class="nv-erro" d="M12 11v3m0 2.2v.1"/><path class="nv-off" d="M4 4l16 16"/></svg></button>
@@ -64,13 +69,24 @@
       <img class="logo-bib" src="img/logo-256.png" width="64" height="64" alt="">
       <div class="bib-tit">
         <h1>Biblioteca</h1>
-        <p class="sub">Abra um PDF, EPUB ou documento do Word. O Mr. B Reader lembra onde você parou e guarda suas marcações.</p>
+        <p class="sub">Abra um PDF, EPUB, documento do Word ou texto (.txt, .md, .html). O Mr. B Reader lembra onde você parou e guarda suas marcações.</p>
       </div>
       <button id="bt-abrir2" class="bt prim"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Abrir arquivo</span></button>
     </section>
-    <div id="soltar" class="soltar vidro">Arraste um arquivo .pdf, .epub, .docx ou .doc para cá</div>
+    <div id="soltar" class="soltar vidro">Arraste um arquivo .pdf, .epub, .docx, .doc, .txt, .md ou .html para cá</div>
     <section>
       <div id="pastas" class="pastas" role="tablist" aria-label="Pastas da biblioteca"></div>
+      <div id="filtros" class="filtros">
+        <label class="filtro-busca"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg><input id="bib-busca" type="search" placeholder="Procurar por título, autor, etiqueta ou ano" aria-label="Procurar na biblioteca" autocomplete="off" spellcheck="false"></label>
+        <select id="f-tipo" class="sel" aria-label="Tipo de arquivo"><option value="">Todos os tipos</option><option value="pdf">PDF</option><option value="epub">EPUB</option><option value="word">Word</option><option value="texto">Texto (.txt, .md, .html)</option></select>
+        <select id="f-estado" class="sel" aria-label="Andamento"><option value="">Qualquer andamento</option><option value="novo">Não começados</option><option value="lendo">Lendo</option><option value="lido">Lidos</option></select>
+        <select id="f-etiqueta" class="sel" aria-label="Etiqueta"><option value="">Todas as etiquetas</option></select>
+        <select id="f-ordem" class="sel" aria-label="Ordenar"><option value="recentes">Abertos por último</option><option value="titulo">Título (A–Z)</option><option value="autor">Autor (A–Z)</option><option value="ano">Ano (mais novo)</option><option value="progresso">Andamento</option></select>
+        <span class="filtros-esp"></span>
+        <button id="bt-todas-notas" class="bt" title="Todas as marcações e notas de todos os livros"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg><span>Anotações</span></button>
+        <button id="bt-estatisticas" class="bt" title="Tempo de leitura e páginas por dia"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Estatísticas</span></button>
+        <button id="bt-bib-mais" class="bt ic" title="Backup e atualização" aria-label="Mais opções da biblioteca"><svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18.5" cy="12" r="1.3" fill="currentColor"/></svg></button>
+      </div>
       <div id="lista-recentes" class="recentes"></div>
       <p id="vazio" class="vazio vidro" hidden>Nenhum arquivo aberto ainda. Clique em <b>Abrir arquivo</b> ou arraste um arquivo para esta janela.</p>
     </section>
@@ -93,11 +109,32 @@
       <div id="epub-rodape" class="epub-rodape" aria-live="off"><span id="rod-cap"></span><span id="rod-pct"></span></div>
       <button id="epub-dir" class="epub-nav dir" title="Próxima" aria-label="Próxima página"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
     </div>
+    <div id="busca" class="busca" role="search" hidden>
+      <div class="busca-linha">
+        <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
+        <input id="busca-txt" type="search" placeholder="Procurar no texto" aria-label="Procurar no texto" autocomplete="off" spellcheck="false" enterkeyhint="search">
+        <span id="busca-qtd" class="busca-qtd" aria-live="polite"></span>
+        <button id="busca-ant" class="bt ic mini" title="Anterior (Shift+Enter)" aria-label="Resultado anterior"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
+        <button id="busca-prox" class="bt ic mini" title="Próximo (Enter)" aria-label="Próximo resultado"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button id="busca-lista-bt" class="bt ic mini" title="Mostrar todos os resultados" aria-label="Lista de resultados" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+        <button id="busca-fechar" class="bt ic mini" title="Fechar (Esc)" aria-label="Fechar a busca"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div id="busca-lista" class="busca-lista" hidden></div>
+    </div>
+    <button id="bt-voltar-link" class="bt-voltar" hidden><svg viewBox="0 0 24 24"><path d="M9 14l-5-5 5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span></span></button>
+    <div id="voz" class="voz" hidden>
+      <button id="voz-tocar" class="bt ic" title="Pausar" aria-label="Pausar a leitura em voz alta"></button>
+      <button id="voz-parar" class="bt ic" title="Parar" aria-label="Parar a leitura em voz alta"><svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg></button>
+      <label class="voz-vel" title="Velocidade"><span id="voz-vel-txt">1,0×</span><input id="voz-vel" type="range" min="0.6" max="2.2" step="0.1" aria-label="Velocidade da voz"></label>
+      <select id="voz-sel" class="sel" aria-label="Voz"></select>
+    </div>
+    <div id="rod-resta" class="rod-resta" hidden></div>
     <div id="progresso" aria-label="Andamento da leitura: clique ou arraste para ir a outro ponto"><div class="trilho"><div id="progresso-barra"></div></div><div id="progresso-dica" class="progresso-dica" hidden></div></div>
   </div>
   <aside id="painel" hidden>
     <div class="abas">
       <button class="aba ativa" data-aba="notas">Anotações <span id="qtd-notas"></span></button>
+      <button class="aba" data-aba="marcadores">Marcadores <span id="qtd-marcadores"></span></button>
       <button class="aba" data-aba="sumario">Sumário</button>
       <button id="bt-fechar-painel" class="aba-fechar so-movel" title="Fechar" aria-label="Fechar o painel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
@@ -108,8 +145,12 @@
         <button id="bt-exportar-pdf" class="bt prim larg">Salvar cópia do PDF com marcações</button>
       </div>
       <div class="painel-rodape">
-        <button id="bt-exportar-txt" class="bt larg">Exportar anotações (.txt)</button>
+        <button id="bt-exportar-txt" class="bt larg">Exportar anotações…</button>
       </div>
+    </div>
+    <div id="aba-marcadores" class="aba-corpo" hidden>
+      <div id="lista-marcadores"></div>
+      <p id="sem-marcadores" class="vazio">Nenhum marcador. Use o botão <b>marcador</b> na barra de cima (ou Ctrl+D) para guardar esta página.</p>
     </div>
     <div id="aba-sumario" class="aba-corpo" hidden><div id="lista-sumario"></div></div>
   </aside>
@@ -123,6 +164,19 @@
   <span class="sep"></span>
   <button id="bt-nota" class="bt mini">Nota</button>
   <button id="bt-copiar" class="bt mini">Copiar</button>
+  <button id="bt-citar" class="bt mini" title="Copiar com a citação (autor, ano, página)">Citar</button>
+  <button id="bt-sel-mais" class="bt mini ic" title="Definir, traduzir, ouvir" aria-label="Mais"><svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18.5" cy="12" r="1.3" fill="currentColor"/></svg></button>
+</div>
+<div id="previa" class="previa" hidden></div>
+<div id="pop-layout" class="pop-layout" role="dialog" aria-label="Layout do texto" hidden>
+  <div class="pl-tit">Margens</div>
+  <div class="segm" data-chave="margem"><button data-v="0">Nenhuma</button><button data-v="1">Pequena</button><button data-v="2">Média</button><button data-v="3">Grande</button></div>
+  <div class="pl-tit">Espaço entre linhas</div>
+  <div class="segm" data-chave="linha"><button data-v="1.3">Justo</button><button data-v="1.6">Normal</button><button data-v="1.9">Amplo</button><button data-v="2.2">Bem amplo</button></div>
+  <div class="pl-tit">Alinhamento</div>
+  <div class="segm" data-chave="alinhar"><button data-v="original">Do livro</button><button data-v="justificado">Justificado</button><button data-v="esquerda">À esquerda</button></div>
+  <div class="pl-tit">Leitura</div>
+  <div class="segm" data-chave="rolagem"><button data-v="0">Virar páginas</button><button data-v="1">Rolar o texto</button></div>
 </div>
 
 <div id="pop-nota" class="pop" hidden>
@@ -136,6 +190,13 @@
   </div>
 </div>
 
+<div id="tela" class="tela-fundo" hidden>
+  <section class="tela" role="dialog" aria-modal="true" aria-labelledby="tela-tit">
+    <header class="tela-cab"><h2 id="tela-tit"></h2><span class="esp"></span><div id="tela-acoes" class="tela-acoes"></div><button id="tela-fechar" class="bt ic" title="Fechar (Esc)" aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+    <div id="tela-corpo" class="tela-corpo"></div>
+  </section>
+</div>
+<div id="atualizacao" class="atualizacao" role="status" hidden></div>
 <div id="menu-flut" class="menu-flut" role="menu" hidden></div>
 <div id="dialogo" class="dialogo-fundo" hidden>
   <form id="dialogo-form" class="dialogo" role="dialog" aria-modal="true" aria-labelledby="dlg-tit" autocomplete="off">

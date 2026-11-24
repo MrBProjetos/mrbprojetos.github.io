@@ -62,6 +62,21 @@ function limparMarca(m) {
   else return null;
   return o;
 }
+const CAMPOS_FICHA = ['titulo', 'autores', 'ano', 'revista', 'volume', 'paginas', 'doi', 'editora', 'origem'];
+const RE_APARELHO = /^[a-z0-9]{6,24}$/;
+function limparMarcador(m) {
+  if (!m || typeof m !== 'object' || typeof m.id !== 'string' || m.id.length > 40) return null;
+  const o = { id: m.id, criado: num(m.criado), alterada: num(m.alterada) || num(m.criado), rotulo: txt(m.rotulo, 300) };
+  if (m.pagina != null) o.pagina = Math.max(1, Math.floor(num(m.pagina)));
+  else if (typeof m.cfi === 'string' && m.cfi.length < 4000) o.cfi = m.cfi;
+  else return null;
+  return o;
+}
+function limparApagados(a) {
+  const o = {};
+  if (a && typeof a === 'object') for (const [k, v] of Object.entries(a).slice(0, 50000)) if (k.length <= 40) o[k] = num(v);
+  return o;
+}
 function limparLivro(r, id) {
   if (!r || typeof r !== 'object' || !RE_ID.test(id) || typeof r.nome !== 'string' || !tipoDe(r.nome)) return null;
   const pos = {};
@@ -70,6 +85,13 @@ function limparLivro(r, id) {
     if (r.pos.zoom) pos.zoom = Math.min(4, Math.max(0.25, num(r.pos.zoom)));
     if (r.pos.fonte) pos.fonte = Math.min(300, Math.max(50, num(r.pos.fonte)));
     if (typeof r.pos.cfi === 'string' && r.pos.cfi.length < 4000) pos.cfi = r.pos.cfi;
+    if (r.pos.ajuste === 'largura' || r.pos.ajuste === 'altura') pos.ajuste = r.pos.ajuste;
+    if (r.pos.duas) pos.duas = 1;
+    const c = r.pos.recorte;
+    if (c && typeof c === 'object') {
+      const v = [c.x0, c.y0, c.x1, c.y1].map(num);
+      if (v[0] >= 0 && v[1] >= 0 && v[2] <= 1 && v[3] <= 1 && v[2] - v[0] > 0.3 && v[3] - v[1] > 0.3) pos.recorte = { x0: v[0], y0: v[1], x1: v[2], y1: v[3] };
+    }
   }
   const marcasApagadas = {};
   if (r.marcasApagadas && typeof r.marcasApagadas === 'object') for (const [k, v] of Object.entries(r.marcasApagadas).slice(0, 50000)) if (k.length <= 40) marcasApagadas[k] = num(v);
@@ -82,6 +104,28 @@ function limparLivro(r, id) {
   };
   if (r.semCapa) o.semCapa = num(r.semCapa);
   if (r.lido) o.lido = num(r.lido);   // marcado como lido (quando)
+  // etiquetas (um livro pode ter várias, além da pasta)
+  if (Array.isArray(r.etiquetas)) {
+    const e = [...new Set(r.etiquetas.filter(t => typeof t === 'string').map(t => t.replace(/[\x00-\x1f,]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40)).filter(Boolean))].slice(0, 30);
+    if (e.length) o.etiquetas = e;
+  }
+  // ficha do artigo/livro (autor, ano, DOI…)
+  if (r.ficha && typeof r.ficha === 'object') {
+    const f = {};
+    for (const k of CAMPOS_FICHA) if (typeof r.ficha[k] === 'string' && r.ficha[k].trim()) f[k] = r.ficha[k].replace(/[\x00-\x1f]/g, ' ').trim().slice(0, k === 'autores' ? 800 : 300);
+    if (Object.keys(f).length) o.ficha = f;
+  }
+  // marcadores de página
+  const mk = (Array.isArray(r.marcadores) ? r.marcadores.slice(0, 5000) : []).map(limparMarcador).filter(Boolean);
+  if (mk.length) o.marcadores = mk;
+  const mka = limparApagados(r.marcadoresApagados);
+  if (Object.keys(mka).length) o.marcadoresApagados = mka;
+  // tempo de leitura por aparelho (somado na tela; cada aparelho só aumenta o seu)
+  if (r.tempo && typeof r.tempo === 'object') {
+    const t = {};
+    for (const [k, v] of Object.entries(r.tempo).slice(0, 30)) if (RE_APARELHO.test(k) && num(v) > 0) t[k] = Math.round(num(v));
+    if (Object.keys(t).length) o.tempo = t;
+  }
   return o;
 }
 function limparPasta(p, id) {
@@ -104,6 +148,7 @@ function paraIndice() {
     if (r.legado) continue;
     const l = limparLivro(r, r.id); if (!l) continue;
     l.marcas.sort((a, b) => (a.id < b.id ? -1 : 1));
+    if (l.marcadores) l.marcadores.sort((a, b) => (a.id < b.id ? -1 : 1));
     livros[r.id] = l;
   }
   return { formato: 'mrb-biblioteca', versao: 1, livros, pastas: dados.pastas };
@@ -137,6 +182,23 @@ function mesclarLivro(a, b) {
   };
   const sc = M.semCapa || O.semCapa; if (sc) r.semCapa = sc;
   if (M.lido) r.lido = M.lido;   // "lido" segue a alteração mais recente, como nome e pasta
+  if (M.etiquetas) r.etiquetas = M.etiquetas;
+  if (M.ficha) r.ficha = M.ficha;
+  // marcadores: junta os dos dois lados (como as marcações)
+  const mApag = { ...(a.marcadoresApagados || {}) };
+  for (const [k, v] of Object.entries(b.marcadoresApagados || {})) mApag[k] = Math.max(mApag[k] || 0, v);
+  const mPorId = new Map();
+  for (const m of [...(a.marcadores || []), ...(b.marcadores || [])]) {
+    if (mApag[m.id]) continue;
+    const x = mPorId.get(m.id);
+    if (!x || num(m.alterada) > num(x.alterada)) mPorId.set(m.id, m);
+  }
+  if (mPorId.size) r.marcadores = [...mPorId.values()].sort((x, y) => (x.id < y.id ? -1 : 1));
+  if (Object.keys(mApag).length) r.marcadoresApagados = mApag;
+  // tempo: cada aparelho tem o seu contador; vale o maior de cada um
+  const tempo = { ...(a.tempo || {}) };
+  for (const [k, v] of Object.entries(b.tempo || {})) tempo[k] = Math.max(tempo[k] || 0, v);
+  if (Object.keys(tempo).length) r.tempo = tempo;
   return r;
 }
 function aplicarMesclagem(remoto) {
@@ -155,6 +217,8 @@ function aplicarMesclagem(remoto) {
     // reaproveita os objetos de marcação locais que não mudaram
     const locPorId = new Map(marcasAntes.map(x => [x.id, x]));
     m.marcas = m.marcas.map(x => { const l = locPorId.get(x.id); return l && num(l.alterada) === num(x.alterada) ? l : x; });
+    // campos opcionais que sumiram do outro lado (etiquetas tiradas, "lido" desmarcado…) somem daqui também
+    for (const k of ['lido', 'semCapa', 'etiquetas', 'ficha', 'marcadores', 'marcadoresApagados', 'tempo']) if (!(k in m)) delete loc[k];
     Object.assign(loc, m);
     mudou = true;
     if (atual && atual.id === id && canonico(loc.marcas.map(x => x.id + x.alterada).sort()) !== idsAntes) atualizarMarcasAbertas(marcasAntes);
@@ -167,6 +231,8 @@ function aplicarMesclagem(remoto) {
     const novo = { ...M, nuvem: mesclarNuvem(M.nuvem, O.nuvem) };
     if (canonico(novo) !== canonico(a)) { Object.assign(a, novo); mudou = true; }
   }
+  // marcadores do livro aberto podem ter mudado no outro aparelho
+  if (mudou && atual && reg) { try { atualizarListaMarcadores(); atualizarBotaoMarcador(); } catch (e) {} }
   return mudou;
 }
 function atualizarMarcasAbertas(antes) {
