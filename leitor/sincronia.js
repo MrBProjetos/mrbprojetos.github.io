@@ -81,6 +81,7 @@ function limparLivro(r, id) {
     marcasApagadas, alt: { meta: num(r.alt && r.alt.meta) }, nuvem: limparNuvem(r.nuvem)
   };
   if (r.semCapa) o.semCapa = num(r.semCapa);
+  if (r.lido) o.lido = num(r.lido);   // marcado como lido (quando)
   return o;
 }
 function limparPasta(p, id) {
@@ -135,6 +136,7 @@ function mesclarLivro(a, b) {
     marcasApagadas: apagadas, alt: { meta: Math.max(ma, mb) }, nuvem: mesclarNuvem(M.nuvem, O.nuvem)
   };
   const sc = M.semCapa || O.semCapa; if (sc) r.semCapa = sc;
+  if (M.lido) r.lido = M.lido;   // "lido" segue a alteração mais recente, como nome e pasta
   return r;
 }
 function aplicarMesclagem(remoto) {

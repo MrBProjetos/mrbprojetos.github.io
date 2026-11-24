@@ -1,7 +1,7 @@
 'use strict';
 /* Mr. B Reader — funciona sem internet depois da primeira visita.
    Guarda os arquivos do próprio site; nada do Google nem de outros sites passa por aqui. */
-const VERSAO = "2.2.0-5a8c6c3774";
+const VERSAO = "2.2.1-2811297b6a";
 const CACHE = 'mrb-' + VERSAO;
 const ESSENCIAIS = ["./","app.js","config.js","img/apple-touch-icon.png","img/favicon-32.png","img/icone-192.png","img/icone-256.png","img/icone-64.png","img/logo-256.png","index.html","lib/epub.min.js","lib/jszip.min.js","lib/pdf.min.js","lib/pdf.worker.min.js","manifest.webmanifest","ponte.js","sincronia.js","style.css","textlayer.css"];   // baixados na instalação
 const SOB_DEMANDA = /\/(fontes|lib)\//; // fontes e bibliotecas extras: guardadas na primeira vez que forem usadas

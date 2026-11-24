@@ -330,3 +330,13 @@ h1 { font: 600 30px var(--f-tit); margin: 0 0 4px; }
   .pop textarea, .dlg-campo input { font-size: 16px; }
   .aviso { bottom: calc(34px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px); text-align: center; }
 }
+
+/* livro marcado como lido */
+.capa .acoes button.lido-on { background: #1f8f4e; }
+.capa .acoes button.lido-on:hover { background: #18773f; }
+.capa .acoes button svg path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.selo-lido { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px 3px 6px; border-radius: 999px; background: #1f8f4e; color: #fff;
+  font: 700 11px var(--f-ui); letter-spacing: .02em; z-index: 2; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.selo-lido svg { width: 13px; height: 13px; }
+.selo-lido svg path { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.livro.lido .barra-prog i { width: 100% !important; background: #1f8f4e; }

@@ -205,6 +205,7 @@ function fecharMenu() { $('#menu-flut').hidden = true; }
 let capasURL = {};             // id do livro → endereço da capa
 const cartoes = new Map();     // id do livro → cartão na tela
 const ICO_MAIS = '<svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18.5" cy="12" r="1.3" fill="currentColor"/></svg>';
+const ICO_LIDO = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const ICO_NUVEM = '<svg viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 0 0 .4-7.98A6 6 0 0 0 6.2 9.3 4.6 4.6 0 0 0 7 18.5z"/><path d="M12 10.5v5.5m-2.3-2.2L12 16l2.3-2.2"/></svg>';
 const VAZIO_TXT = 'Nenhum arquivo aberto ainda. Clique em <b>Abrir arquivo</b> ou arraste um arquivo para esta janela.';
 
@@ -274,20 +275,21 @@ function cartao(r) {
   const local = !!dados.caminhos[id];
   const soNuvem = !local && r.nuvem && r.nuvem.arquivo;
   const el = document.createElement('div');
-  el.className = 'livro' + (soNuvem ? ' so-nuvem' : ''); el.tabIndex = 0; el.setAttribute('role', 'button');
+  el.className = 'livro' + (soNuvem ? ' so-nuvem' : '') + (r.lido ? ' lido' : ''); el.tabIndex = 0; el.setAttribute('role', 'button');
   el.title = r.nome + (r.ultima ? '\nLido em ' + dataBR(r.ultima) : '') + '\n' + (local ? (API.web ? 'Guardado neste aparelho' : dados.caminhos[id]) : soNuvem ? 'No Google Drive (toque para baixar e abrir)' : 'O arquivo não está ' + (API.web ? 'neste aparelho' : 'neste computador'));
   el.innerHTML = `<div class="capa">${htmlCapa(id, r)}
-      <div class="acoes"><button data-a="menu" title="Opções" aria-label="Opções do livro">${ICO_MAIS}</button></div>
+      <div class="acoes"><button data-a="lido" class="${r.lido ? 'lido-on' : ''}" title="${r.lido ? 'Marcar como não lido' : 'Marcar como lido'}" aria-label="${r.lido ? 'Marcar como não lido' : 'Marcar como lido'}" aria-pressed="${!!r.lido}">${ICO_LIDO}</button><button data-a="menu" title="Opções" aria-label="Opções do livro">${ICO_MAIS}</button></div>
       ${soNuvem ? `<span class="selo-nuvem" title="Está no Google Drive">${ICO_NUVEM}</span>` : ''}
+      ${r.lido ? `<span class="selo-lido" title="Marcado como lido em ${esc(dataBR(r.lido))}">${ICO_LIDO}Lido</span>` : ''}
       <div class="prog-transf" hidden><i></i></div></div>
     <div class="info"><div class="nome"></div><div class="barra-prog"><i style="width:${pct}%"></i></div>
-      <div class="meta"><span>${pct}% lido${r.tipo === 'pdf' && r.pos && r.pos.pagina ? ' · pág. ' + r.pos.pagina : ''}</span><span>${n ? n + (n > 1 ? ' marcas' : ' marca') : ''}</span></div></div>`;
+      <div class="meta"><span>${r.lido ? 'Lido em ' + esc(dataBR(r.lido).split(' ')[0]) : pct + '% lido' + (r.tipo === 'pdf' && r.pos && r.pos.pagina ? ' · pág. ' + r.pos.pagina : '')}</span><span>${n ? n + (n > 1 ? ' marcas' : ' marca') : ''}</span></div></div>`;
   el.querySelector('.nome').textContent = semExt(r.nome);
   const img = el.querySelector('img');
   if (img) img.onerror = () => { delete capasURL[id]; el.querySelector('.capa').insertAdjacentHTML('afterbegin', capaGerada(r)); img.nextElementSibling && img.nextElementSibling.remove(); img.remove(); };
   el.addEventListener('click', e => {
     const b = e.target.closest('button[data-a]');
-    if (b) { e.stopPropagation(); menuLivro(r, b); return; }
+    if (b) { e.stopPropagation(); if (b.dataset.a === 'lido') alternarLido(r); else menuLivro(r, b); return; }
     abrirLivro(id);
   });
   el.addEventListener('contextmenu', e => { e.preventDefault(); menuLivro(r, el.querySelector('button[data-a]')); });
@@ -304,7 +306,7 @@ function trocarCapaNoCartao(id) {
 }
 function menuLivro(r, ancora) {
   const local = dados.caminhos[r.id];
-  const itens = [{ rotulo: 'Abrir', acao: () => abrirLivro(r.id) }];
+  const itens = [{ rotulo: 'Abrir', acao: () => abrirLivro(r.id) }, { rotulo: r.lido ? 'Marcar como não lido' : 'Marcar como lido', acao: () => alternarLido(r) }];
   if (local && !API.web) itens.push({ rotulo: 'Mostrar na pasta do Windows', acao: async () => { if (!(await API.mostrarNaPasta(local))) aviso('O arquivo não está mais nesse lugar.'); } });
   else if (r.nuvem && r.nuvem.arquivo) itens.push({ rotulo: 'Baixar do Google Drive', acao: () => baixarLivro(r.id, false) });
   itens.push('-', { secao: 'Pasta' });
@@ -313,6 +315,15 @@ function menuLivro(r, ancora) {
   itens.push({ rotulo: 'Nova pasta…', acao: async () => { const p = await novaPasta(); if (p) moverLivro(r, p.id); } });
   itens.push('-', { rotulo: 'Remover da biblioteca…', perigo: true, acao: () => removerLivro(r) });
   abrirMenu(ancora, itens);
+}
+/* "lido": marca manual na biblioteca. Não mexe na posição de leitura, então desmarcar volta como estava. */
+function alternarLido(r) {
+  r.lido = r.lido ? 0 : Date.now();
+  if (!r.lido) delete r.lido;
+  tocar(r); gravar();
+  const velho = cartoes.get(r.id);
+  if (velho) { const novo = cartao(r); velho.replaceWith(novo); cartoes.set(r.id, novo); }
+  aviso(r.lido ? '“' + semExt(r.nome) + '” marcado como lido' : '“' + semExt(r.nome) + '” marcado como não lido');
 }
 function moverLivro(r, pastaId) {
   if ((r.pasta || null) === pastaId) return;
@@ -869,7 +880,7 @@ async function abrirEPUB(buffer, minha) {
   epub = { book, rend, locaisProntos: false };
   // reajusta as colunas quando o painel abre/fecha ou a janela muda de tamanho
   let tRes = null;
-  epub.ro = new ResizeObserver(() => { clearTimeout(tRes); tRes = setTimeout(() => { if (epub && epub.rend === rend) { try { rend.resize(); } catch (e) {} } }, 120); });
+  epub.ro = new ResizeObserver(() => { clearTimeout(tRes); tRes = setTimeout(() => { if (epub && epub.rend === rend) { try { rend.resize(); } catch (e) {} redesenharMarcasLogo(); } }, 120); });
   epub.ro.observe($('#epub-view'));
   // as cores da página ficam em temaNoDoc (os temas do epub.js "vazavam" de uma cor para a outra)
   rend.themes.default({ 'html': { 'overscroll-behavior': 'none' }, 'img, svg, image': { 'max-width': '100% !important', 'max-height': '92vh !important' }, 'p': { 'line-height': '1.6 !important' } });
@@ -881,7 +892,8 @@ async function abrirEPUB(buffer, minha) {
   rend.themes.fontSize((reg.pos.fonte || 100) + '%'); tamanhoTxt(reg.pos.fonte || 100);
   $('#sel-fonte').value = dados.prefs.fonte;
 
-  rend.on('relocated', loc => posicaoEPUB(loc));
+  rend.on('relocated', loc => { posicaoEPUB(loc); redesenharMarcas(); });
+  rend.on('resized', () => redesenharMarcasLogo());
   rend.on('keyup', teclas);
   rend.on('selected', (cfi, contents) => {
     const s = contents.window.getSelection();
@@ -960,6 +972,7 @@ function aplicarFonteEPUB() {
   const cfi = reg && reg.pos.cfi;
   const docs = epub.rend.getContents().map(c => c.document);
   docs.forEach(fonteNoDoc);
+  redesenharMarcasLogo();
   // depois que a fonte carrega o texto reflui; volta para o mesmo trecho
   Promise.all(docs.map(d => d.fonts ? d.fonts.ready : null)).then(() => {
     if (epub && cfi) epub.rend.display(cfi);
@@ -1077,6 +1090,19 @@ function fonteEPUB(dir) {
   i = Math.max(0, Math.min(TAMANHOS.length - 1, i + dir));
   reg.pos.fonte = TAMANHOS[i]; reg.ultima = Date.now(); sujo(); gravar();
   epub.rend.themes.fontSize(TAMANHOS[i] + '%'); tamanhoTxt(TAMANHOS[i]);
+  redesenharMarcasLogo();
+}
+/* destaques do EPUB: o epub.js desenha cada um por cima do texto, numa camada à parte.
+   Quando o texto muda de lugar (tamanho ou tipo de letra, janela, tela cheia), a camada precisa ser redesenhada. */
+function redesenharMarcas() {
+  if (!epub || !epub.rend.manager || !epub.rend.manager.views) return;
+  const vs = epub.rend.manager.views;
+  for (const v of (vs.all ? vs.all() : vs._views || [])) { try { if (v.pane) v.pane.render(); } catch (e) {} }
+}
+let tMarcas = [];
+function redesenharMarcasLogo() {
+  tMarcas.forEach(clearTimeout);
+  tMarcas = [50, 250, 700, 1500].map(ms => setTimeout(redesenharMarcas, ms));   // o texto se reorganiza aos poucos (fontes carregando)
 }
 function capitulosDoSumario(toc) {
   const porIndice = new Map();
