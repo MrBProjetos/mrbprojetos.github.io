@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR" data-tema="claro" data-ui="claro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Leitor de PDF, EPUB e Word que lembra onde você parou, com destaques, notas e sincronização opcional pelo seu Google Drive.">
+<meta name="theme-color" content="#fbfaf7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mr. B Reader">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' blob:; img-src 'self' blob: data:; font-src 'self' blob: data:; connect-src 'self' blob: data: https://www.googleapis.com https://oauth2.googleapis.com; worker-src 'self' blob:; frame-src 'self' blob: about:; child-src 'self' blob:; media-src 'self' blob: data:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="color-scheme" content="light dark">
+<title>Mr. B Reader</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="textlayer.css">
+<script src="config.js" defer></script>
+<script src="ponte.js" defer></script>
+<script src="sincronia.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<header id="barra">
+  <div class="grupo">
+    <img class="marca" src="img/icone-64.png" width="26" height="26" alt="Mr. B Reader">
+    <button id="bt-biblioteca" class="bt" title="Biblioteca (Ctrl+B)"><svg viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 4.5l3.8-1 3.7 15.5-3.8 1z"/></svg><span>Biblioteca</span></button>
+    <button id="bt-abrir" class="bt" title="Abrir arquivo (Ctrl+O)"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/></svg><span>Abrir</span></button>
+  </div>
+  <div id="titulo-doc" class="titulo"></div>
+  <div class="grupo" id="controles-leitura" hidden>
+    <button id="bt-ant" class="bt ic" title="Página anterior (←)"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div id="pos" class="pos">
+      <label class="pos-item" title="Porcentagem lida. Digite um número e aperte Enter para ir até ele."><input id="in-pct" type="text" inputmode="decimal" aria-label="Porcentagem lida"><span>%</span></label>
+      <span class="pos-div" aria-hidden="true"></span>
+      <label class="pos-item" id="pos-pag"><span class="pos-rot">pág.</span><input id="in-pagina" type="text" inputmode="numeric" aria-label="Página atual"><span id="tot-paginas"></span></label>
+    </div>
+    <button id="bt-prox" class="bt ic" title="Próxima página (→)"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    <span class="sep"></span>
+    <span id="opcoes-texto" class="opcoes-texto">
+    <button id="bt-menos" class="bt ic" title="Diminuir (Ctrl -)"><b>A−</b></button>
+    <span id="tamanho" class="tamanho">100%</span>
+    <button id="bt-mais" class="bt ic" title="Aumentar (Ctrl +)"><b>A+</b></button>
+    <span class="sep"></span>
+    <select id="sel-tema" class="sel" title="Cor da página. Automática: clara ou escura junto com o programa" aria-label="Cor da página">
+      <option value="auto">Página automática</option><option value="claro">Página clara</option><option value="sepia">Página sépia</option><option value="escuro">Página escura</option>
+    </select>
+    <select id="sel-fonte" class="sel" title="Fonte do texto" aria-label="Fonte do texto"></select>
+    </span>
+    <button id="bt-aa" class="bt ic so-movel" title="Tamanho do texto, cor da página e fonte" aria-label="Opções do texto" aria-expanded="false"><b>Aa</b></button>
+    <button id="bt-painel" class="bt" title="Anotações e sumário"><svg viewBox="0 0 24 24"><path d="M5 3h14v18l-7-4-7 4z"/></svg><span>Anotações</span></button>
+  </div>
+  <div class="grupo">
+    <button id="bt-nuvem" class="bt ic bt-nuvem" data-estado="desligada" title="Nuvem" aria-label="Nuvem (Google Drive)"><svg viewBox="0 0 24 24"><path class="nv-forma" d="M7 18.5h10.5a4 4 0 0 0 .4-7.98A6 6 0 0 0 6.2 9.3 4.6 4.6 0 0 0 7 18.5z"/><path class="nv-ok" d="M9.3 13.8l1.9 1.9 3.6-3.8"/><path class="nv-sync" d="M9.2 14a3 3 0 0 1 5.2-1.9M14.8 14a3 3 0 0 1-5.2 1.9"/><path class="nv-erro" d="M12 11v3m0 2.2v.1"/><path class="nv-off" d="M4 4l16 16"/></svg></button>
+    <button id="bt-interface" class="bt ic" title="Aparência do programa (claro/escuro)" aria-label="Aparência do programa"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg></button>
+  </div>
+</header>
+
+<div id="bib-wrap" class="bib-wrap">
+  <div id="bib-fundo" class="bib-fundo" hidden></div>
+  <main id="biblioteca">
+    <section class="bib-topo vidro">
+      <img class="logo-bib" src="img/logo-256.png" width="64" height="64" alt="">
+      <div class="bib-tit">
+        <h1>Biblioteca</h1>
+        <p class="sub">Abra um PDF, EPUB ou documento do Word. O Mr. B Reader lembra onde você parou e guarda suas marcações.</p>
+      </div>
+      <button id="bt-abrir2" class="bt prim"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Abrir arquivo</span></button>
+    </section>
+    <div id="soltar" class="soltar vidro">Arraste um arquivo .pdf, .epub, .docx ou .doc para cá</div>
+    <section>
+      <div id="pastas" class="pastas" role="tablist" aria-label="Pastas da biblioteca"></div>
+      <div id="lista-recentes" class="recentes"></div>
+      <p id="vazio" class="vazio vidro" hidden>Nenhum arquivo aberto ainda. Clique em <b>Abrir arquivo</b> ou arraste um arquivo para esta janela.</p>
+    </section>
+  </main>
+  <button id="bt-capas" class="bt-fundo bt-capas" title="Tamanho das capas (Ctrl + roda do mouse)" aria-label="Tamanho das capas" aria-expanded="false"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg></button>
+  <div id="pop-capas" class="pop-capas" role="dialog" aria-label="Tamanho das capas" hidden>
+    <div class="pc-tit">Tamanho das capas</div>
+    <div class="pc-linha"><button id="capas-menos" class="bt ic" title="Diminuir (Ctrl −)" aria-label="Diminuir capas"><b>−</b></button><input id="capas-range" type="range" min="0" max="5" step="1" aria-label="Tamanho das capas"><button id="capas-mais" class="bt ic" title="Aumentar (Ctrl +)" aria-label="Aumentar capas"><b>+</b></button></div>
+    <div id="capas-nome" class="pc-nome"></div>
+  </div>
+  <button id="bt-fundo" class="bt-fundo" title="Imagem de fundo da biblioteca" aria-label="Imagem de fundo da biblioteca"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16.5l-5-5-9.5 8"/></svg></button>
+</div>
+
+<main id="leitura" hidden>
+  <div id="area">
+    <div id="pdf-scroll" class="pdf-scroll" hidden><div id="pdf-paginas"></div></div>
+    <div id="epub-area" class="epub-area" hidden>
+      <button id="epub-esq" class="epub-nav esq" title="Anterior" aria-label="Página anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div id="epub-view"></div>
+      <div id="epub-rodape" class="epub-rodape" aria-live="off"><span id="rod-cap"></span><span id="rod-pct"></span></div>
+      <button id="epub-dir" class="epub-nav dir" title="Próxima" aria-label="Próxima página"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+    <div id="progresso" aria-label="Andamento da leitura: clique ou arraste para ir a outro ponto"><div class="trilho"><div id="progresso-barra"></div></div><div id="progresso-dica" class="progresso-dica" hidden></div></div>
+  </div>
+  <aside id="painel" hidden>
+    <div class="abas">
+      <button class="aba ativa" data-aba="notas">Anotações <span id="qtd-notas"></span></button>
+      <button class="aba" data-aba="sumario">Sumário</button>
+      <button id="bt-fechar-painel" class="aba-fechar so-movel" title="Fechar" aria-label="Fechar o painel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div id="aba-notas" class="aba-corpo">
+      <div id="lista-notas"></div>
+      <p id="sem-notas" class="vazio">Selecione um trecho do texto para destacar ou escrever uma nota.</p>
+      <div class="painel-rodape" id="rodape-pdf">
+        <button id="bt-exportar-pdf" class="bt prim larg">Salvar cópia do PDF com marcações</button>
+      </div>
+      <div class="painel-rodape">
+        <button id="bt-exportar-txt" class="bt larg">Exportar anotações (.txt)</button>
+      </div>
+    </div>
+    <div id="aba-sumario" class="aba-corpo" hidden><div id="lista-sumario"></div></div>
+  </aside>
+</main>
+
+<div id="menu-sel" class="menu-sel" hidden>
+  <button class="cor" data-cor="amarelo" title="Destacar em amarelo"></button>
+  <button class="cor" data-cor="verde" title="Destacar em verde"></button>
+  <button class="cor" data-cor="rosa" title="Destacar em rosa"></button>
+  <button class="cor" data-cor="azul" title="Destacar em azul"></button>
+  <span class="sep"></span>
+  <button id="bt-nota" class="bt mini">Nota</button>
+  <button id="bt-copiar" class="bt mini">Copiar</button>
+</div>
+
+<div id="pop-nota" class="pop" hidden>
+  <div class="pop-trecho" id="pop-trecho"></div>
+  <textarea id="pop-texto" rows="4" placeholder="Escreva sua nota..."></textarea>
+  <div class="pop-acoes">
+    <button id="pop-excluir" class="bt mini perigo">Excluir marcação</button>
+    <span class="esp"></span>
+    <button id="pop-cancelar" class="bt mini">Fechar</button>
+    <button id="pop-salvar" class="bt mini prim">Salvar nota</button>
+  </div>
+</div>
+
+<div id="menu-flut" class="menu-flut" role="menu" hidden></div>
+<div id="dialogo" class="dialogo-fundo" hidden>
+  <form id="dialogo-form" class="dialogo" role="dialog" aria-modal="true" aria-labelledby="dlg-tit" autocomplete="off">
+    <h3 id="dlg-tit"></h3>
+    <p id="dlg-txt"></p>
+    <div id="dlg-campos"></div>
+    <div class="dlg-acoes"><button type="button" id="dlg-cancelar" class="bt">Cancelar</button><button type="submit" id="dlg-ok" class="bt prim">OK</button></div>
+  </form>
+</div>
+<div id="aviso" class="aviso" role="status" hidden></div>
+<div id="carregando" class="carregando" hidden><div class="giro"></div><span id="carregando-txt">Abrindo…</span></div>
+</body>
+</html>
