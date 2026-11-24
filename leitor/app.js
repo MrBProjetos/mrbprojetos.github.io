@@ -916,12 +916,14 @@ async function abrirEPUB(buffer, minha) {
     // deslizar para o lado é do leitor (virar a página), não do navegador ("voltar" do Chrome no celular)
     for (const el of [contents.document.documentElement, contents.document.body]) if (el) { el.style.touchAction = 'none'; el.style.overscrollBehavior = 'none'; }
     travarToque(contents.document, contents.window);
+    const d = contents.document;
+    if ((reg.pos.fonte || 100) !== 100 && d.querySelector('img, svg')) imagensProntas(d).then(() => { if (epub && epub.rend === rend) { imagensNoDoc(d, (reg && reg.pos.fonte) || 100); redesenharMarcasLogo(); } });
   });
   rend.themes.fontSize((reg.pos.fonte || 100) + '%'); tamanhoTxt(reg.pos.fonte || 100);
   $('#sel-fonte').value = dados.prefs.fonte;
 
   rend.on('relocated', loc => { posicaoEPUB(loc); redesenharMarcas(); });
-  rend.on('resized', () => redesenharMarcasLogo());
+  rend.on('resized', () => { if ((reg.pos.fonte || 100) !== 100) imagensEPUB(); redesenharMarcasLogo(); });
   rend.on('keyup', teclas);
   rend.on('selected', (cfi, contents) => {
     const s = contents.window.getSelection();
@@ -1115,12 +1117,45 @@ function posicaoEPUB(loc) {
   $('#progresso-barra').style.width = ((reg.progresso || 0) * 100) + '%';
   gravar();
 }
+/* imagens do livro acompanham o tamanho da letra: mede cada imagem como ela fica com a letra em 100%
+   e aplica a mesma proporção da letra (os limites de largura e altura da página continuam valendo) */
+function imagensNoDoc(d, pct) {
+  if (!d || !d.body) return;
+  const imgs = [...d.querySelectorAll('img, svg')].filter(el => !(el.tagName.toLowerCase() === 'svg' && el.parentElement && el.parentElement.closest('svg')));
+  // devolve o estilo que o próprio livro deu à imagem
+  const limpar = el => { if ('mrbImg' in el.dataset) { const o = el.dataset.mrbImg; if (o) el.setAttribute('style', o); else el.removeAttribute('style'); delete el.dataset.mrbImg; } };
+  if (!imgs.length) return;
+  if (!pct || pct === 100) { imgs.forEach(limpar); return; }
+  // o tamanho da letra fica no html e no body; mede com os dois em 100%
+  const caixas = [d.documentElement, d.body].map(el => [el, el.style.getPropertyValue('font-size'), el.style.getPropertyPriority('font-size')]);
+  imgs.forEach(limpar);
+  for (const [el] of caixas) el.style.setProperty('font-size', '100%', 'important');
+  const base = imgs.map(el => { const r = el.getBoundingClientRect(); return [r.width, r.height]; });
+  for (const [el, v, p] of caixas) { if (v) el.style.setProperty('font-size', v, p); else el.style.removeProperty('font-size'); }
+  const k = pct / 100;
+  imgs.forEach((el, i) => {
+    const [w, h] = base[i]; if (!w || !h) return;
+    el.dataset.mrbImg = el.getAttribute('style') || '';
+    el.style.setProperty('width', (w * k).toFixed(1) + 'px', 'important');
+    el.style.setProperty('height', (h * k).toFixed(1) + 'px', 'important');
+    el.style.setProperty('object-fit', 'contain', 'important');
+  });
+}
+function imagensProntas(d) {
+  return Promise.all([...d.querySelectorAll('img')].map(im => im.complete ? null : new Promise(ok => { im.addEventListener('load', ok, { once: true }); im.addEventListener('error', ok, { once: true }); setTimeout(ok, 3000); })));
+}
+function imagensEPUB() {
+  if (!epub) return;
+  const pct = (reg && reg.pos.fonte) || 100;
+  for (const c of epub.rend.getContents()) imagensNoDoc(c.document, pct);
+}
 function fonteEPUB(dir) {
   const v = reg.pos.fonte || 100;
   let i = TAMANHOS.indexOf(v); if (i < 0) i = TAMANHOS.indexOf(100);
   i = Math.max(0, Math.min(TAMANHOS.length - 1, i + dir));
   reg.pos.fonte = TAMANHOS[i]; reg.ultima = Date.now(); sujo(); gravar();
   epub.rend.themes.fontSize(TAMANHOS[i] + '%'); tamanhoTxt(TAMANHOS[i]);
+  imagensEPUB();
   redesenharMarcasLogo();
 }
 /* destaques do EPUB: o epub.js desenha cada um por cima do texto, numa camada à parte.
@@ -1471,7 +1506,10 @@ function teclas(e) {
   if (e.key === 'Escape') { esconderMenus(); fecharPop(); fecharMenu(); if (!$('#pop-capas').hidden) popCapas(false); return; }
   if (!atual) return;
   const alvo = e.target && e.target.tagName;
-  if (alvo === 'INPUT' || alvo === 'TEXTAREA' || alvo === 'SELECT') return;
+  if (alvo === 'INPUT' || alvo === 'TEXTAREA') return;
+  // numa caixa de escolha (cor da página, fonte), as setas para o lado continuam virando a página
+  if (alvo === 'SELECT' && e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  if (alvo === 'SELECT') e.target.blur();
   if (e.key === 'ArrowRight' || e.key === 'PageDown') { proxima(); e.preventDefault && e.preventDefault(); }
   if (e.key === 'ArrowLeft' || e.key === 'PageUp') { anterior(); e.preventDefault && e.preventDefault(); }
 }
@@ -1488,8 +1526,8 @@ $('#bt-fundo').onclick = menuFundo;
 $('#bt-prox').onclick = proxima; $('#bt-ant').onclick = anterior;
 $('#epub-dir').onclick = proxima; $('#epub-esq').onclick = anterior;
 $('#bt-mais').onclick = mais; $('#bt-menos').onclick = menos;
-$('#sel-tema').onchange = e => aplicarTema(e.target.value);
-$('#sel-fonte').onchange = e => { dados.prefs.fonte = FONTE_POR_ID[e.target.value] ? e.target.value : 'original'; gravar(); aplicarFonteEPUB(); };
+$('#sel-tema').onchange = e => { aplicarTema(e.target.value); e.target.blur(); };
+$('#sel-fonte').onchange = e => { dados.prefs.fonte = FONTE_POR_ID[e.target.value] ? e.target.value : 'original'; gravar(); aplicarFonteEPUB(); e.target.blur(); };
 function painel(abrir) {
   const p = $('#painel');
   if (abrir === undefined) abrir = p.hidden;
