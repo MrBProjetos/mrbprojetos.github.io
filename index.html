@@ -20,6 +20,10 @@
   ul { padding-left: 22px; } li { margin: 6px 0; }
   .cartao { background: var(--cartao); border: 1px solid var(--linha); border-left: 4px solid var(--acento); border-radius: 10px; padding: 16px 20px; margin: 18px 0; }
   a { color: var(--acento); }
+  .abrir { display: inline-flex; align-items: center; gap: 10px; background: var(--acento); color: #fff; text-decoration: none; font-weight: 600; font-size: 18px; padding: 13px 22px; border-radius: 10px; margin: 6px 0 4px; }
+  .abrir:hover { filter: brightness(1.08); }
+  .nota { color: var(--suave); font-size: 15px; margin: 6px 0 0; }
+  @media (max-width: 520px) { main { padding: 32px 18px 32px; } header img { width: 72px; height: 72px; } h1 { font-size: 32px; } .abrir { display: flex; justify-content: center; } }
   footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--linha); color: var(--suave); font-size: 14px; display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; }
 </style>
 </head>
@@ -29,11 +33,14 @@
     <img src="icone.png" alt="Ícone do Mr. B Reader" width="96" height="96">
     <div>
       <h1>Mr. B Reader</h1>
-      <p class="sub">Leitor de PDF, EPUB e documentos do Word para Windows.</p>
+      <p class="sub">Leitor de PDF, EPUB e documentos do Word, no navegador (computador e celular) e no Windows.</p>
     </div>
   </header>
 
-  <p>O Mr. B Reader é um programa gratuito para ler livros e documentos no computador, sem distrações. Ele lembra onde você parou em cada arquivo e guarda seus destaques e anotações.</p>
+  <p>O Mr. B Reader é gratuito para ler livros e documentos sem distrações. Ele lembra onde você parou em cada arquivo e guarda seus destaques e anotações.</p>
+
+  <a class="abrir" href="leitor/">Abrir o leitor no navegador →</a>
+  <p class="nota">Funciona no computador e no celular, sem instalar nada. No celular, use "Adicionar à tela inicial" (ou "Instalar app") no menu do navegador para ele abrir como um aplicativo e funcionar sem internet.</p>
 
   <h2>O que ele faz</h2>
   <ul>
@@ -41,13 +48,14 @@
     <li>Destaques em quatro cores e notas em qualquer trecho, com exportação das anotações.</li>
     <li>Biblioteca com capas e pastas criadas por você.</li>
     <li>Página clara, sépia ou escura, várias fontes de leitura e modo escuro do programa.</li>
-    <li>Opcional: sincronização com o <strong>seu próprio Google Drive</strong>, para continuar a leitura em outro computador.</li>
+    <li>No celular: deslize ou toque nas laterais para virar a página.</li>
+    <li>Opcional: sincronização com o <strong>seu próprio Google Drive</strong>, para continuar a leitura em outro aparelho (computador, celular ou o programa de Windows).</li>
   </ul>
 
   <h2>Seus dados</h2>
   <div class="cartao">
-    <p>O programa roda no seu computador. Não existe servidor do Mr. B Reader: o desenvolvedor não recebe nem vê seus livros, marcações ou notas.</p>
-    <p>Se você decidir conectar sua conta do Google, o programa acessa <strong>somente os arquivos que ele mesmo criou</strong> no seu Google Drive (a pasta "Mr. B Reader" e uma área oculta do app). O restante do seu Drive não fica acessível ao programa.</p>
+    <p>O leitor roda no seu aparelho. No navegador, os livros ficam guardados no próprio navegador; no Windows, no seu computador. Não existe servidor do Mr. B Reader: o desenvolvedor não recebe nem vê seus livros, marcações ou notas.</p>
+    <p>Se você decidir conectar sua conta do Google, o leitor acessa <strong>somente os arquivos que ele mesmo criou</strong> no seu Google Drive (a pasta "Mr. B Reader" e uma área oculta do app). O restante do seu Drive não fica acessível a ele.</p>
     <p>Detalhes completos na <a href="privacidade.html">Política de Privacidade</a>.</p>
   </div>
 
