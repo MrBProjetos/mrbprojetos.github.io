@@ -1012,13 +1012,13 @@ async function abrirEPUB(buffer, minha) {
     if (!rolagem) travarToque(contents.document, contents.window);
     ganchosEPUB(contents);
     const d = contents.document;
-    if ((reg.pos.fonte || 100) !== 100 && d.querySelector('img, svg')) imagensProntas(d).then(() => { if (epub && epub.rend === rend) { imagensNoDoc(d, (reg && reg.pos.fonte) || 100); redesenharMarcasLogo(); } });
+    if (d.querySelector('img, svg')) imagensProntas(d).then(() => { if (epub && epub.rend === rend) { imagensNoDoc(d, (reg && reg.pos.fonte) || 100); redesenharMarcasLogo(); } });
   });
   rend.themes.fontSize((reg.pos.fonte || 100) + '%'); tamanhoTxt(reg.pos.fonte || 100);
   $('#sel-fonte').value = dados.prefs.fonte;
 
   rend.on('relocated', loc => { posicaoEPUB(loc); redesenharMarcas(); });
-  rend.on('resized', () => { if ((reg.pos.fonte || 100) !== 100) imagensEPUB(); redesenharMarcasLogo(); });
+  rend.on('resized', () => { imagensEPUB(); redesenharMarcasLogo(); });
   rend.on('keyup', teclas);
   rend.on('selected', (cfi, contents) => {
     const s = contents.window.getSelection();
@@ -1123,6 +1123,7 @@ function aplicarLayoutEPUB() {
   if (!epub) return;
   const cfi = reg && reg.pos.cfi;
   epub.rend.getContents().forEach(c => layoutNoDoc(c.document));
+  imagensEPUB();
   try { epub.rend.resize(); } catch (e) {}
   redesenharMarcasLogo();
   if (cfi) setTimeout(() => { if (epub) epub.rend.display(cfi); }, 60);
@@ -1258,27 +1259,77 @@ function posicaoEPUB(loc) {
 }
 /* imagens do livro acompanham o tamanho da letra: mede cada imagem como ela fica com a letra em 100%
    e aplica a mesma proporção da letra (os limites de largura e altura da página continuam valendo) */
+/* Imagens do livro e tamanho da letra:
+   - letra menor: as imagens diminuem na mesma proporção;
+   - letra maior: as imagens ficam no tamanho que o livro deu (não crescem e não empurram o texto);
+   - imagens que flutuam ao lado do texto (letras capitulares, como um "E" decorado no começo do capítulo)
+     ficam com no máximo ~6 linhas de altura e menos da metade da coluna. Assim cabem ao lado do parágrafo
+     delas e não são jogadas para a coluna ou página seguinte. */
 function imagensNoDoc(d, pct) {
   if (!d || !d.body) return;
   const imgs = [...d.querySelectorAll('img, svg')].filter(el => !(el.tagName.toLowerCase() === 'svg' && el.parentElement && el.parentElement.closest('svg')));
+  if (!imgs.length) return;
   // devolve o estilo que o próprio livro deu à imagem
   const limpar = el => { if ('mrbImg' in el.dataset) { const o = el.dataset.mrbImg; if (o) el.setAttribute('style', o); else el.removeAttribute('style'); delete el.dataset.mrbImg; } };
-  if (!imgs.length) return;
-  if (!pct || pct === 100) { imgs.forEach(limpar); return; }
-  // o tamanho da letra fica no html e no body; mede com os dois em 100%
-  const caixas = [d.documentElement, d.body].map(el => [el, el.style.getPropertyValue('font-size'), el.style.getPropertyPriority('font-size')]);
   imgs.forEach(limpar);
-  for (const [el] of caixas) el.style.setProperty('font-size', '100%', 'important');
-  const base = imgs.map(el => { const r = el.getBoundingClientRect(); return [r.width, r.height]; });
-  for (const [el, v, p] of caixas) { if (v) el.style.setProperty('font-size', v, p); else el.style.removeProperty('font-size'); }
-  const k = pct / 100;
+  const k = Math.min(1, (pct || 100) / 100);
+  // tamanho de cada imagem como o livro desenha com a letra em 100% (o tamanho da letra fica no html e no body)
+  let base;
+  if (k < 1) {
+    const caixas = [d.documentElement, d.body].map(el => [el, el.style.getPropertyValue('font-size'), el.style.getPropertyPriority('font-size')]);
+    for (const [el] of caixas) el.style.setProperty('font-size', '100%', 'important');
+    base = imgs.map(el => { const r = el.getBoundingClientRect(); return [r.width, r.height]; });
+    for (const [el, v, p] of caixas) { if (v) el.style.setProperty('font-size', v, p); else el.style.removeProperty('font-size'); }
+  } else base = imgs.map(el => { const r = el.getBoundingClientRect(); return [r.width, r.height]; });
+  const win = d.defaultView;
+  const altPagina = ($('#epub-view') && $('#epub-view').clientHeight) || (win && win.innerHeight) || 800;
+  const mudar = [], flutuantes = [];
   imgs.forEach((el, i) => {
     const [w, h] = base[i]; if (!w || !h) return;
-    el.dataset.mrbImg = el.getAttribute('style') || '';
-    el.style.setProperty('width', (w * k).toFixed(1) + 'px', 'important');
-    el.style.setProperty('height', (h * k).toFixed(1) + 'px', 'important');
-    el.style.setProperty('object-fit', 'contain', 'important');
+    const agora = el.getBoundingClientRect();
+    let W = w * k, H = h * k;
+    const cs = win.getComputedStyle(el);
+    if (cs.float === 'left' || cs.float === 'right') {
+      // linha do parágrafo ao lado (se a imagem está sozinha num bloco, vale o parágrafo seguinte)
+      let bloco = el.parentElement && el.parentElement.closest('p,li,blockquote,dd,div,section,body');
+      if (bloco && (bloco.textContent || '').trim().length < 3) { const prox = bloco.nextElementSibling; if (prox) bloco = prox; }
+      const bcs = bloco ? win.getComputedStyle(bloco) : cs;
+      const lh = parseFloat(bcs.lineHeight) || (parseFloat(bcs.fontSize) || 16) * 1.35;
+      const colW = bloco ? bloco.getBoundingClientRect().width : W * 3;
+      const s = Math.min(1, (lh * 8.2) / H, (altPagina * 0.45) / H, (colW * 0.48) / W);
+      W *= s; H *= s;
+      flutuantes.push({ el, bloco, lh });
+    }
+    if (Math.abs(W - agora.width) < 0.6 && Math.abs(H - agora.height) < 0.6) return;   // já está do tamanho certo
+    mudar.push([el, W, H]);
   });
+  const fixar = (el, W, H) => {
+    if (!('mrbImg' in el.dataset)) el.dataset.mrbImg = el.getAttribute('style') || '';
+    el.style.setProperty('width', W.toFixed(1) + 'px', 'important');
+    el.style.setProperty('height', H.toFixed(1) + 'px', 'important');
+    el.style.setProperty('max-width', '100%', 'important');
+    el.style.setProperty('object-fit', 'contain', 'important');
+  };
+  for (const [el, W, H] of mudar) fixar(el, W, H);
+  // páginas viradas: se a capitular não coube no pé da coluna (foi parar longe do seu parágrafo), diminui até caber
+  if (!(epub && epub.rolagem)) {
+    for (const { el, bloco, lh } of flutuantes) {
+      if (!bloco) continue;
+      const r = el.getBoundingClientRect();
+      const w = d.createTreeWalker(bloco, NodeFilter.SHOW_TEXT);
+      let t = w.nextNode(); while (t && !t.data.trim()) t = w.nextNode();
+      if (!t) continue;
+      const rg = d.createRange(); rg.setStart(t, 0); rg.setEnd(t, Math.min(1, t.data.length));
+      const tx = rg.getBoundingClientRect();
+      const longe = Math.abs(r.top - tx.top) > lh * 1.5 || tx.left < r.left - 1 || tx.left - r.right > 60;
+      if (!longe) continue;
+      const pad = parseFloat(win.getComputedStyle(d.body).paddingBottom) || 0;
+      const sobra = win.innerHeight - pad - tx.top - 4;   // espaço da linha do parágrafo até o pé da coluna
+      const H = Math.max(lh * 2.2, Math.min(r.height, sobra));
+      if (H >= r.height - 0.5) continue;
+      fixar(el, r.width * H / r.height, H);
+    }
+  }
 }
 function imagensProntas(d) {
   return Promise.all([...d.querySelectorAll('img')].map(im => im.complete ? null : new Promise(ok => { im.addEventListener('load', ok, { once: true }); im.addEventListener('error', ok, { once: true }); setTimeout(ok, 3000); })));
